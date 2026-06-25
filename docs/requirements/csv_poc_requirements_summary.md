@@ -1,7 +1,5 @@
 # AI Grid PoC — Cost Management Requirements Summary
 
-> **Hard Deadline: July 31, 2026** — PoC only, not production-grade software.
-
 ---
 
 ## Overview
@@ -154,7 +152,7 @@ Single system of record for cost data with drill-down by tenant, project, model,
 - IN: Granular cost breakdowns at listed dimensions
 - OUT: Account hierarchy management (owned by external billing system)
 
-> **TODO (Product Management):** The acceptance criterion "Dashboard shows near-real-time token consumption, compute hours, estimated costs" references token consumption, which is out of scope for the July 31 PoC (token metering belongs to the MaaS workstream). Please confirm whether this bullet should be removed or reworded to reflect capacity-based cost tracking only (e.g., compute hours and estimated costs).
+> **TODO (Product Management):** The acceptance criterion "Dashboard shows near-real-time token consumption, compute hours, estimated costs" references token consumption, which is out of scope for the capacity-based PoC (token metering belongs to the MaaS workstream). Please confirm whether this bullet should be removed or reworded to reflect capacity-based cost tracking only (e.g., compute hours and estimated costs).
 
 ---
 
@@ -217,7 +215,7 @@ Export chargeback reports mapping GPU hours to token consumption per business un
 - IN: Chargeback reports for PoC workloads
 - OUT: Integration with external billing systems
 
-> **TODO (Product Management):** The description and acceptance criteria reference "GPU hours to token consumption per business unit." Token metering (REQ-4) is out of scope for the July 31 PoC. Please confirm whether REQ-5 should be re-scoped to capacity-based chargeback only (e.g., provisioned compute hours per tenant/project), or deferred entirely to the MaaS workstream alongside REQ-4.
+> **TODO (Product Management):** The description and acceptance criteria reference "GPU hours to token consumption per business unit." Token metering (REQ-4) is out of scope for the capacity-based PoC. Please confirm whether REQ-5 should be re-scoped to capacity-based chargeback only (e.g., provisioned compute hours per tenant/project), or deferred entirely to the MaaS workstream alongside REQ-4.
 
 ---
 
@@ -299,7 +297,7 @@ The following items require new epics or stories and have no existing implementa
 | 7 | REQ-9 | Quota/Budget Status API | Expose a fast API for OSAC to check tenant quota/budget status before resource creation. Source of truth to be agreed. |
 | 8 | REQ-10 | Notification/Alert Back Channel to OSAC | Send threshold notifications (50%, 70%, 90%, 100%) from RHCM to OSAC. Transport (webhook, Kafka, cloud events) and format TBD. |
 
-### PoC Simplifications (not needed for July 31)
+### PoC Simplifications
 
 - No Prometheus metric scraping from workload clusters
 - No rework of the hourly CSV ingestion pipeline
@@ -325,14 +323,14 @@ The following items require new epics or stories and have no existing implementa
 
 ## Uncertain if requirements for POC
 
-The following items were originally listed as requirements but are explicitly called out as not needed for the July 31 PoC. Their inclusion alongside PoC requirements is misleading. **Product Management should confirm whether these belong in a Post-PoC / MaaS Workstream backlog or should be removed from this document entirely.**
+The following items were originally listed as requirements but are explicitly called out as not needed for the PoC. Their inclusion alongside PoC requirements is misleading. **Product Management should confirm whether these belong in a Post-PoC / MaaS Workstream backlog or should be removed from this document entirely.**
 
 ---
 
 ### REQ-2a — Cloud Events from OpenShift AI *(MaaS workstream, separate from PoC)*
 **Priority:** HIGH *(needs revisiting if deferred)*
 
-Consume Cloud Events from OpenShift AI 5 for token metering. This is a separate workstream from the July 31 PoC.
+Consume Cloud Events from OpenShift AI 5 for token metering. This is a separate workstream from the capacity-based PoC.
 
 **Acceptance Criteria:**
 - RHCM can receive and process Cloud Events from OpenShift AI
@@ -342,16 +340,16 @@ Consume Cloud Events from OpenShift AI 5 for token metering. This is a separate 
 
 **Scope:**
 - IN: Receive and process OpenShift AI Cloud Events for MaaS metering
-- OUT: Production-grade event pipeline; **not required for the July 31 capacity-based PoC**
+- OUT: Production-grade event pipeline; **not required for the capacity-based PoC**
 
-> **TODO (Product Management):** Please confirm whether REQ-2a should be tracked as a Post-PoC / MaaS Workstream item or removed from this document. The HIGH priority label should also be revisited in the context of the July 31 deadline.
+> **TODO (Product Management):** Please confirm whether REQ-2a should be tracked as a Post-PoC / MaaS Workstream item or removed from this document. The HIGH priority label should also be revisited.
 
 ---
 
 ### REQ-4 — Token Metering *(MaaS workstream, separate from PoC)*
 **Priority:** HIGH *(needs revisiting if deferred)*
 
-Track token dimensions (input, output, cached, reasoning) and GPU compute metrics. Separate from the July 31 PoC.
+Track token dimensions (input, output, cached, reasoning) and GPU compute metrics. Separate from the capacity-based PoC.
 
 **Acceptance Criteria:**
 - Ingest prompt_tokens, completion_tokens, cached_tokens from vLLM
@@ -360,9 +358,9 @@ Track token dimensions (input, output, cached, reasoning) and GPU compute metric
 
 **Scope:**
 - IN: Text token metering for future MaaS support
-- OUT: Multi-modal (image, audio); **not required for July 31 capacity-based PoC**
+- OUT: Multi-modal (image, audio); **not required for capacity-based PoC**
 
-> **TODO (Product Management):** Please confirm whether REQ-4 should be tracked as a Post-PoC / MaaS Workstream item or removed from this document. The HIGH priority label should also be revisited in the context of the July 31 deadline.
+> **TODO (Product Management):** Please confirm whether REQ-4 should be tracked as a Post-PoC / MaaS Workstream item or removed from this document. The HIGH priority label should also be revisited.
 
 ### REQ-6 — Platform Security & Access Control
 **Priority:** STANDARD
@@ -381,7 +379,7 @@ MFA, granular RBAC for billing admins, and short-lived auth tokens.
 - IN: All listed security controls
 - OUT: N/A
 
-> **TODO (Product Management):** Please confirm whether REQ-6 should be tracked as a Post-PoC item or removed from this document. The STANDARD priority label should also be revisited in the context of the July 31 deadline.
+> **TODO (Product Management):** Please confirm whether REQ-6 should be tracked as a Post-PoC item or removed from this document. The STANDARD priority label should also be revisited.
 
 ---
 
@@ -402,6 +400,6 @@ Zero-leakage reconciliation, immutable audit logs, and dispute resolution suppor
 - IN: All listed audit/reconciliation controls
 - OUT: N/A
 
-> **TODO (Product Management):** Please confirm whether REQ-7 should be tracked as a Post-PoC item or removed from this document. The STANDARD priority label should also be revisited in the context of the July 31 deadline.
+> **TODO (Product Management):** Please confirm whether REQ-7 should be tracked as a Post-PoC item or removed from this document. The STANDARD priority label should also be revisited.
 
 ---

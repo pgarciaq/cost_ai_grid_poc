@@ -2,8 +2,6 @@
 
 Summary of the essential context, requirements, and action items for planning the Cost Management PoC spike.
 
-> **Hard Deadline: July 31, 2026** — PoC only, not production-grade GA software.
-
 ---
 
 ## Project Context

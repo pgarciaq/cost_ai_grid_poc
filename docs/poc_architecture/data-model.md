@@ -451,8 +451,8 @@ CREATE INDEX ON quotas (tenant_id, resource_type, meter_name);
 
 ## References
 
-- [Docs/architecture.md](architecture.md)
-- [Docs/event-types.md](event-types.md)
+- [docs/poc_architecture/architecture.md](architecture.md)
+- [docs/poc_architecture/event-types.md](event-types.md)
 - [CloudEvents Spec](https://cloudevents.io/)
 - COST-6951 — Cost Tiers
 - COST-7164 — MaaS Spike

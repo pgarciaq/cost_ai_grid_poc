@@ -368,4 +368,4 @@ The existing collector scripts (`collect-caas.sh`, `collect.sh`) can be used as 
 - [CloudEvents Specification v1.0](https://cloudevents.io/)
 - [OSAC CaaS Metering README](https://github.com/masayag/osac-metering-discover-poc/blob/main/collector/README-caas.md)
 - [OSAC VMaaS Metering README](https://github.com/masayag/osac-metering-discover-poc/blob/main/collector/README.md)
-- [Docs/architecture.md](architecture.md)
+- [docs/poc_architecture/architecture.md](architecture.md)

@@ -1,6 +1,6 @@
 # Cost Management for AI Grid — Architecture
 
-> **Status:** POC (Proof of Concept) — due July 31, 2026
+> **Status:** POC (Proof of Concept)
 > **Goal:** A PoC-quality Cost Management on-premise instance integrated with OSAC for the AI Grid sovereign cloud blueprint.
 
 ---
@@ -297,5 +297,5 @@ cost_ai_grid_poc/
 - [OSAC Fulfillment Service](https://github.com/osac-project/fulfillment-service)
 - [OSAC Metering Discover POC](https://github.com/masayag/osac-metering-discover-poc)
 - [OSAC Console Mockups](https://heyethankim.github.io/osac-demo/)
-- [Docs/fullfillment_service_setup.md](fullfillment_service_setup.md) — local dev setup guide
-- [Docs/Cost Management for AI Grid spike.md](Cost%20Management%20for%20AI%20Grid%20spike.md) — requirements spike
+- [docs/development/fullfillment_service_setup.md](../development/fullfillment_service_setup.md) — local dev setup guide
+- [docs/requirements/ai_grid_poc_requirements_brief.md](../requirements/ai_grid_poc_requirements_brief.md) — requirements spike
