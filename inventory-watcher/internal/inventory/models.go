@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+type ProjectRecord struct {
+	ProjectID   string          `json:"project_id"`
+	Name        string          `json:"name"`
+	Tenant      string          `json:"tenant"`
+	Labels      json.RawMessage `json:"labels"`
+	CreatedAt   time.Time       `json:"created_at"`
+	DeletedAt   *time.Time      `json:"deleted_at"`
+	LastUpdated time.Time       `json:"last_updated"`
+}
+
 type ComputeInstanceRecord struct {
 	InstanceID    string          `json:"instance_id"`
 	Name          string          `json:"name"`

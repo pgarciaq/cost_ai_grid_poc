@@ -49,6 +49,7 @@ func (r *Reconciler) Run(ctx context.Context) error {
 func (r *Reconciler) reconcileAll(ctx context.Context) {
 	r.logger.Info("starting reconciliation")
 
+	r.reconcileProjects(ctx)
 	r.reconcileComputeInstances(ctx)
 	r.reconcileClusters(ctx)
 	r.reconcileInstanceTypes(ctx)
@@ -198,6 +199,32 @@ func (r *Reconciler) reconcileClusters(ctx context.Context) {
 		"created", created,
 		"deleted", deleted,
 	)
+}
+
+func (r *Reconciler) reconcileProjects(ctx context.Context) {
+	osacProjects, err := r.client.ListProjects(ctx)
+	if err != nil {
+		r.logger.Error("failed to list OSAC projects", "error", err)
+		return
+	}
+
+	for _, p := range osacProjects {
+		createdAt := time.Now()
+		if p.Metadata.CreationTimestamp != nil {
+			createdAt = *p.Metadata.CreationTimestamp
+		}
+
+		if err := r.store.UpsertProject(ctx, inventory.ProjectRecord{
+			ProjectID: p.ID,
+			Name:      p.Metadata.Name,
+			Tenant:    p.Metadata.Tenant,
+			CreatedAt: createdAt,
+		}); err != nil {
+			r.logger.Error("failed to upsert project", "id", p.ID, "error", err)
+		}
+	}
+
+	r.logger.Info("reconciled projects", "count", len(osacProjects))
 }
 
 func (r *Reconciler) reconcileInstanceTypes(ctx context.Context) {

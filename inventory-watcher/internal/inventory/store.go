@@ -43,6 +43,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_events_event_id ON raw_events (event_i
 CREATE INDEX IF NOT EXISTS idx_raw_events_tenant_time ON raw_events (tenant_id, event_time DESC);
 CREATE INDEX IF NOT EXISTS idx_raw_events_type_time ON raw_events (event_type, event_time DESC);
 
+CREATE TABLE IF NOT EXISTS inventory_project (
+    project_id     TEXT PRIMARY KEY,
+    name           TEXT NOT NULL DEFAULT '',
+    tenant         TEXT NOT NULL DEFAULT '',
+    labels         JSONB DEFAULT '{}'::jsonb,
+    created_at     TIMESTAMPTZ NOT NULL,
+    deleted_at     TIMESTAMPTZ,
+    last_updated   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_proj_tenant ON inventory_project (tenant);
+
 CREATE TABLE IF NOT EXISTS inventory_compute_instance (
     instance_id    TEXT PRIMARY KEY,
     name           TEXT NOT NULL DEFAULT '',
@@ -214,6 +226,89 @@ func (s *Store) GetComputeInstance(ctx context.Context, instanceID string) (*Com
 		return nil, err
 	}
 	return &r, nil
+}
+
+// BillableClusters returns alive clusters in billable states.
+func (s *Store) BillableClusters(ctx context.Context) ([]ClusterRecord, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT cluster_id, name, tenant, template, node_sets, state, labels,
+		       created_at, deleted_at, last_event_id, last_updated, last_metered_at
+		FROM inventory_cluster
+		WHERE deleted_at IS NULL AND state IN ('CLUSTER_STATE_READY', 'CLUSTER_STATE_PROGRESSING')
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ClusterRecord
+	for rows.Next() {
+		var r ClusterRecord
+		if err := rows.Scan(&r.ClusterID, &r.Name, &r.Tenant, &r.Template, &r.NodeSetsJSON,
+			&r.State, &r.Labels, &r.CreatedAt, &r.DeletedAt, &r.LastEventID, &r.LastUpdated, &r.LastMeteredAt); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
+// UpdateClusterLastMetered sets last_metered_at for a cluster.
+func (s *Store) UpdateClusterLastMetered(ctx context.Context, clusterID string, t time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE inventory_cluster SET last_metered_at = $2 WHERE cluster_id = $1
+	`, clusterID, t)
+	return err
+}
+
+// UpsertProject inserts or updates a project in the inventory.
+func (s *Store) UpsertProject(ctx context.Context, rec ProjectRecord) error {
+	labelsJSON, err := marshalLabels(rec.Labels)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO inventory_project
+			(project_id, name, tenant, labels, created_at, deleted_at, last_updated)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		ON CONFLICT (project_id) DO UPDATE SET
+			name = EXCLUDED.name,
+			tenant = EXCLUDED.tenant,
+			labels = EXCLUDED.labels,
+			deleted_at = EXCLUDED.deleted_at,
+			last_updated = NOW()
+	`, rec.ProjectID, rec.Name, rec.Tenant, labelsJSON, rec.CreatedAt, rec.DeletedAt)
+
+	if err != nil {
+		return fmt.Errorf("upsert project %s: %w", rec.ProjectID, err)
+	}
+
+	s.logger.Debug("upserted project", "id", rec.ProjectID, "name", rec.Name)
+	return nil
+}
+
+// ListAliveProjects returns all projects not yet deleted.
+func (s *Store) ListAliveProjects(ctx context.Context) ([]ProjectRecord, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT project_id, name, tenant, labels, created_at, deleted_at, last_updated
+		FROM inventory_project WHERE deleted_at IS NULL
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ProjectRecord
+	for rows.Next() {
+		var r ProjectRecord
+		if err := rows.Scan(&r.ProjectID, &r.Name, &r.Tenant, &r.Labels,
+			&r.CreatedAt, &r.DeletedAt, &r.LastUpdated); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
 }
 
 // UpsertComputeInstance inserts or updates a compute instance in the inventory.

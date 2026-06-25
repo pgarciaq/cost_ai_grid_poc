@@ -20,3 +20,4 @@ __pycache__/
 /tmp/osac_token.txt
 server.key
 server.crt
+docs/.markdown-viewer-temp.html

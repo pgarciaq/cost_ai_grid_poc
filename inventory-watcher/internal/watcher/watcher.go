@@ -138,6 +138,20 @@ func (w *Watcher) handleCreateOrUpdate(ctx context.Context, event osac.Event) er
 			State:          it.Spec.State,
 		})
 	}
+	if p := event.Project; p != nil {
+		createdAt := time.Now()
+		if p.Metadata.CreationTimestamp != nil {
+			createdAt = *p.Metadata.CreationTimestamp
+		}
+		labelsJSON, _ := json.Marshal(p.Metadata.Labels)
+		return w.store.UpsertProject(ctx, inventory.ProjectRecord{
+			ProjectID: p.ID,
+			Name:      p.Metadata.Name,
+			Tenant:    p.Metadata.Tenant,
+			Labels:    labelsJSON,
+			CreatedAt: createdAt,
+		})
+	}
 	return nil
 }
 

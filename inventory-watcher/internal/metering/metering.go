@@ -2,6 +2,7 @@ package metering
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -45,6 +46,7 @@ func (m *Meter) sweep(ctx context.Context) {
 	now := time.Now().UTC()
 
 	m.meterComputeInstances(ctx, now)
+	m.meterClusters(ctx, now)
 }
 
 func (m *Meter) meterComputeInstances(ctx context.Context, now time.Time) {
@@ -119,6 +121,88 @@ func (m *Meter) MeterComputeInstanceFinal(ctx context.Context, instanceID string
 	}
 
 	m.logger.Debug("final metering for deleted instance", "id", instanceID, "duration_seconds", durationSeconds)
+}
+
+func (m *Meter) meterClusters(ctx context.Context, now time.Time) {
+	clusters, err := m.store.BillableClusters(ctx)
+	if err != nil {
+		m.logger.Error("failed to list billable clusters", "error", err)
+		return
+	}
+
+	metered := 0
+	for _, cl := range clusters {
+		periodStart := cl.CreatedAt
+		if cl.LastMeteredAt != nil {
+			periodStart = *cl.LastMeteredAt
+		}
+
+		durationSeconds := now.Sub(periodStart).Seconds()
+		if durationSeconds <= 0 {
+			continue
+		}
+
+		entries := clusterMeters(cl, durationSeconds, periodStart, now)
+		for _, entry := range entries {
+			if err := m.store.InsertMeteringEntry(ctx, entry); err != nil {
+				m.logger.Error("failed to insert cluster metering entry",
+					"resource", cl.ClusterID, "meter", entry.MeterName, "error", err)
+			}
+		}
+
+		if err := m.store.UpdateClusterLastMetered(ctx, cl.ClusterID, now); err != nil {
+			m.logger.Error("failed to update cluster last_metered_at",
+				"resource", cl.ClusterID, "error", err)
+		}
+		metered++
+	}
+
+	if metered > 0 {
+		m.logger.Info("metering sweep complete", "clusters", metered)
+	}
+}
+
+func clusterMeters(cl inventory.ClusterRecord, durationSeconds float64, periodStart, periodEnd time.Time) []inventory.MeteringEntry {
+	entries := []inventory.MeteringEntry{
+		{
+			ResourceType: "cluster",
+			ResourceID:   cl.ClusterID,
+			TenantID:     cl.Tenant,
+			MeterName:    "cluster_uptime_seconds",
+			Value:        durationSeconds,
+			Unit:         "seconds",
+			PeriodStart:  periodStart,
+			PeriodEnd:    periodEnd,
+		},
+	}
+
+	var nodeSets map[string]struct {
+		HostType string `json:"host_type"`
+		Size     int32  `json:"size"`
+	}
+	if cl.NodeSetsJSON != nil {
+		_ = json.Unmarshal(cl.NodeSetsJSON, &nodeSets)
+	}
+
+	totalWorkerNodeSeconds := 0.0
+	for _, ns := range nodeSets {
+		totalWorkerNodeSeconds += float64(ns.Size) * durationSeconds
+	}
+
+	if totalWorkerNodeSeconds > 0 {
+		entries = append(entries, inventory.MeteringEntry{
+			ResourceType: "cluster",
+			ResourceID:   cl.ClusterID,
+			TenantID:     cl.Tenant,
+			MeterName:    "cluster_worker_node_seconds",
+			Value:        totalWorkerNodeSeconds,
+			Unit:         "node_seconds",
+			PeriodStart:  periodStart,
+			PeriodEnd:    periodEnd,
+		})
+	}
+
+	return entries
 }
 
 func computeInstanceMeters(inst inventory.ComputeInstanceRecord, durationSeconds float64, periodStart, periodEnd time.Time) []inventory.MeteringEntry {
