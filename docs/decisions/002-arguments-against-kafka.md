@@ -135,6 +135,28 @@ running.
 For a cloud/managed deployment (e.g., MSK, Confluent Cloud), Kafka adds a
 per-hour and per-GB cost that scales with event volume.
 
+### 8. This is the proven Kubernetes pattern
+
+The Watch stream + List reconciliation pattern is not something we invented.
+It is the standard pattern used by every Kubernetes controller, operator, and
+client — the same pattern that manages millions of clusters in production
+worldwide.
+
+The Kubernetes informer framework works exactly this way:
+
+1. **List** all resources of a type to build initial state
+2. **Watch** for changes going forward
+3. On disconnection, **re-list** to catch up on missed events
+4. Use a **resource version** to avoid processing stale data
+
+This pattern has been battle-tested at massive scale (thousands of nodes,
+hundreds of thousands of pods) for over a decade. It works without Kafka,
+without a message broker, without any intermediate system.
+
+OSAC itself is built on this pattern — its controllers use the same
+List + Watch approach internally. Using the same pattern from the cost
+consumer is architecturally consistent with the rest of the ecosystem.
+
 ## When Kafka would make sense
 
 Kafka is the right choice when:
