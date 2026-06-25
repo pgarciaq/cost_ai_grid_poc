@@ -15,26 +15,49 @@ A proof-of-concept integrating [Red Hat Cost Management](https://github.com/proj
 
 See [`docs/poc_architecture/architecture.md`](docs/poc_architecture/architecture.md).
 
-## Stack
+## Structure
 
-| Layer | Choice |
-|---|---|
-| Language | Python (uv + pyproject.toml) |
-| API | FastAPI |
-| Storage | PostgreSQL |
-| ORM | SQLAlchemy + Alembic |
-| Event format | CloudEvents 1.0 |
-| Event transport | Kafka (KRaft) |
+```
+docs/                          Design documents and analysis
+  thoughts.md                  Architecture exploration and consumer design
+  cost-reports-feasibility.md  What cost reports are feasible with OSAC data
+  local-dev-setup.md           How to run everything locally
 
-## Docs
+snippets/                      Reusable scripts and curl commands
+  create-test-data.sh          Populate OSAC with test compute instances
 
-- [`docs/poc_architecture/architecture.md`](docs/poc_architecture/architecture.md) — system design and component map
-- [`docs/poc_architecture/data-model.md`](docs/poc_architecture/data-model.md) — database schema
-- [`docs/poc_architecture/event-types.md`](docs/poc_architecture/event-types.md) — CloudEvents reference
-- [`docs/poc_architecture/Metering/koku_cost_model_summary.md`](docs/poc_architecture/Metering/koku_cost_model_summary.md) — Koku OCP cost model metrics reference
-- [`docs/requirements/ai_grid_poc_requirements_brief.md`](docs/requirements/ai_grid_poc_requirements_brief.md) — requirements and action items
-- [`docs/requirements/csv_poc_requirements_summary.md`](docs/requirements/csv_poc_requirements_summary.md) — cost management requirements summary
-- [`docs/development/fullfillment_service_setup.md`](docs/development/fullfillment_service_setup.md) — local dev setup
+inventory-watcher/             Go service: watches OSAC events, builds cost inventory
+  cmd/consumer/                Entry point
+  internal/watcher/            Real-time OSAC event stream consumer
+  internal/reconciler/         Periodic full-state reconciliation
+  internal/summarizer/         Duration-based usage calculation
+  internal/inventory/          PostgreSQL inventory store
+  internal/osac/               OSAC REST API client and types
+  scripts/                     OIDC server, token generator, setup script
+```
+
+## Inventory Watcher
+
+A Go service that connects to the OSAC fulfillment-service and maintains a cost
+inventory database:
+
+- **Watches** OSAC events in real-time (CREATED/UPDATED/DELETED for compute
+  instances, clusters, instance types)
+- **Reconciles** periodically against OSAC List endpoints to catch missed events
+- **Summarizes** resource durations into daily usage (CPU-core-hours, memory-GB-hours)
+
+```bash
+cd inventory-watcher
+go build -o inventory-watcher ./cmd/consumer/
+
+OSAC_BASE_URL=http://localhost:8011 \
+OSAC_TOKEN=$(cat /tmp/osac_token.txt) \
+INVENTORY_DB_URL=postgres://user:pass@localhost:5434/costdb \
+./inventory-watcher
+```
+
+See [docs/local-dev-setup.md](docs/local-dev-setup.md) for full setup instructions.
+
 
 ## License
 Discovery artifacts and scripts in this repository are part of the [Koku](https://github.com/project-koku/koku) project. OSAC is a separate open-source project with its own license — see the OSAC repository for details.

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Environment & secrets
 .env
 .env.*
@@ -27,6 +28,7 @@ develop-eggs/
 lib/
 lib64/
 *.so
+*.pyc
 
 # Virtual environments
 .venv/
@@ -80,3 +82,14 @@ alembic.ini.local
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Binaries
+inventory-watcher/inventory-watcher
+inventory-watcher/consumer
+*.exe
+
+# Tokens / secrets
+/tmp/osac_token.txt
+server.key
+server.crt
+docs/.markdown-viewer-temp.html
