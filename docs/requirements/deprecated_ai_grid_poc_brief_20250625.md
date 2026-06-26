@@ -1,5 +1,8 @@
 # AI Grid PoC — Cost Management Requirements Brief
 
+> **⚠ Superseded.** This document has been merged into the consolidated requirements reference.
+> The authoritative source of truth is **[poc_requirements_final.md](poc_requirements_final.md)**.
+
 Summary of the essential context, requirements, and action items for planning the Cost Management PoC spike.
 
 ---

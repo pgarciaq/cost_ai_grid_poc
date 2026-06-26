@@ -1,5 +1,7 @@
 # Koku Cost Model Metrics: Feasibility with OSAC Metering
 
+> **See also:** [metering-spec-draft.md](metering-spec-draft.md) — how metering is implemented for the PoC.
+
 ## What OSAC Metering Provides
 
 From lifecycle events (CREATED/UPDATED/DELETED) on VMs, clusters, VNets, subnets, and IPs:

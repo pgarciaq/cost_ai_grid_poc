@@ -44,7 +44,7 @@ flowchart TB
     subgraph poc [Cost AI Grid POC]
         watcher["inventory-watcher\n(Go)"]
         koku_db["PostgreSQL\n(POC)"]
-        koku_api["Cost API\n(FastAPI — planned)"]
+        koku_api["Cost API"]
         ui["Data Grid UI\n(TBD)"]
         watcher --> koku_db
         koku_db --> koku_api
@@ -65,18 +65,28 @@ When running the full stack locally, services are assigned ports to avoid confli
 
 | Service | Port | Notes |
 |---|---|---|
-| Koku API | 8000 | Existing |
-| Koku masu | 5042 | Existing |
-| Koku PostgreSQL | 15432 | Existing |
 | OSAC gRPC | 8010 | |
-| OSAC REST gateway | 8011 | `/api/fulfillment/v1/` |
+| OSAC REST gateway | 8011 | `/api/fulfillment/v1/`; inventory-watcher also uses `/api/private/v1/events/watch` |
 | OSAC metrics | 8012 | |
-| OSAC OIDC server | 8013 | Local JWT signing |
+| OSAC OIDC server | 8013 | Local JWT signing; `inventory-watcher/scripts/oidc_server.py` + `gen_token.py` |
 | OSAC PostgreSQL | 5433 | |
-| **inventory-watcher** | — | Go binary; connects to OSAC REST `:8011` |
-| **POC PostgreSQL** | **5434** | docker-compose |
+| **inventory-watcher** | — | **Implemented** — Go binary (`inventory-watcher/cmd/consumer`); no listen port. Four concurrent workers — see [inventory-watcher Workers](#inventory-watcher-workers). Persists to POC PostgreSQL `:5434`. Auth: `OSAC_TOKEN` Bearer JWT against `:8011`. Go module logs as `cost-event-consumer`; built artifact is typically named `inventory-watcher`. |
+| **POC PostgreSQL** | **5434** | Cost inventory DB (`costdb`); schema auto-migrated by inventory-watcher on startup |
 | **POC FastAPI** | **8020** | Planned REST API |
 | POC Kafka | 9092 | Optional — only needed for Option C |
+
+### inventory-watcher configuration
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `OSAC_BASE_URL` | `http://localhost:8011` | REST gateway |
+| `OSAC_TOKEN` | (optional) | Bearer JWT |
+| `OSAC_CA_CERT` | (optional) | Custom TLS root |
+| `INVENTORY_DB_URL` | `postgres://user:pass@localhost:5434/costdb` | POC DB |
+| `RECONCILE_INTERVAL` | `1h` | Reconciler ticker |
+| `SUMMARIZE_INTERVAL` | `1h` | Summarizer ticker |
+
+Meter sweep interval is **60s**, hardcoded in `cmd/consumer/main.go` (not env-configurable).
 
 ---
 
@@ -94,14 +104,32 @@ Tenant
               └── BareMetalInstance (BMaaS — RHEL / Windows)
 ```
 
+### PoC scope
+
+The hierarchy above is the full OSAC model. **inventory-watcher** tracks only a subset today:
+
+| Resource | Inventory | Metering |
+|---|---|---|
+| ComputeInstance (VMaaS) | Yes | Yes |
+| Cluster (CaaS) | Yes | Yes |
+| Project | Yes (reconcile + events) | N/A |
+| InstanceType | Yes (lookup catalog) | N/A |
+| Model (MaaS) | No | No |
+| BareMetal (BMaaS) | No | No |
+
+MaaS consumption and BMaaS remain planned / blocked on OSAC schema.
+
 The OSAC fulfillment service exposes these via gRPC (`osac.public.v1`) with a REST gateway:
 
-| gRPC Service | REST Endpoint |
-|---|---|
-| `osac.public.v1.ClusterTemplates` | `GET /api/fulfillment/v1/cluster_templates` |
-| `osac.public.v1.Clusters` | `GET /api/fulfillment/v1/clusters` |
-| `osac.public.v1.ClusterOrders` | `GET /api/fulfillment/v1/cluster_orders` |
-| `osac.public.v1.Events` | `GET /api/private/v1/events/watch` (NDJSON stream via REST gateway) |
+| gRPC Service | REST Endpoint | Used by inventory-watcher |
+|---|---|---|
+| `osac.public.v1.Events` | `GET /api/private/v1/events/watch` (NDJSON stream) | **Watcher** |
+| `osac.public.v1.Projects` | `GET /api/fulfillment/v1/projects` | **Reconciler** |
+| `osac.public.v1.ComputeInstances` | `GET /api/fulfillment/v1/compute_instances` | **Reconciler** |
+| `osac.public.v1.Clusters` | `GET /api/fulfillment/v1/clusters` | **Reconciler** |
+| `osac.public.v1.InstanceTypes` | `GET /api/fulfillment/v1/instance_types` | **Reconciler** |
+| `osac.public.v1.ClusterTemplates` | `GET /api/fulfillment/v1/cluster_templates` | Not synced in PoC |
+| `osac.public.v1.ClusterOrders` | `GET /api/fulfillment/v1/cluster_orders` | Not synced in PoC |
 
 ---
 
@@ -109,7 +137,7 @@ The OSAC fulfillment service exposes these via gRPC (`osac.public.v1`) with a RE
 
 The OSAC fulfillment service exposes a gRPC streaming `Events` service (with a REST gateway watch endpoint) and REST List APIs for inventory. Three ingestion options are viable for the POC. **Option A is the current implementation** — see [ADR-002](../decisions/002-arguments-against-kafka.md) for why Kafka is deferred.
 
-### Option A — Watch Stream (PoC default)
+## Watch Stream
 
 The underlying transport is `osac.public.v1.Events` (gRPC streaming watch). The PoC consumes it via the REST gateway NDJSON endpoint using the Go `inventory-watcher` service, with a periodic reconciler against List endpoints.
 
@@ -119,11 +147,11 @@ flowchart LR
     consumer["inventory-watcher\n(Go)"]
     db["POC PostgreSQL\n:5434"]
     osac -->|"GET /api/private/v1/events/watch\n(NDJSON stream)"| consumer
-    osac -->|"GET /clusters, /compute_instances\n(reconciler)"| consumer
+    osac -->|"GET /projects, /compute_instances,\n/clusters, /instance_types\n(reconciler)"| consumer
     consumer --> db
 ```
 
-**Pros:** Real-time events; no additional infrastructure; works today against local OSAC; reconciler catches missed events.
+**Pros:** Real-time events; no additional infrastructure; works today against local OSAC; reconciler catches missed events; exponential backoff reconnect (1s → 30s cap) on stream disconnect.
 **Cons:** Single-consumer pattern; requires JWT auth against OSAC; not suitable if multiple independent consumers need the same event stream.
 
 ### Option B — REST Polling (fallback)
@@ -141,6 +169,8 @@ flowchart LR
 **Cons:** Snapshot-based; misses events between polls; 60s granularity.
 
 ### Option C — Kafka (optional future)
+
+See [ADR-002](../decisions/002-arguments-against-kafka.md) for why Kafka is deferred.
 
 ```mermaid
 flowchart LR
@@ -160,66 +190,97 @@ flowchart LR
 
 Use **Option A** (Watch stream + reconciler) for the PoC and likely for production v1 — see [ADR-002](../decisions/002-arguments-against-kafka.md). The 60-second metering sweep interval is fixed by [ADR-001](../decisions/001-metering-sweep-interval.md).
 
-Adopt **Option C** only if multiple independent consumers emerge or OSAC standardizes on Kafka as a first-class transport. Keep event ingestion behind an interface (`internal/osac/client.go` today) so the transport layer is swappable without changing the metering pipeline.
+Adopt **Option C** only if multiple independent consumers emerge or OSAC standardizes on Kafka as a first-class transport. Keep event ingestion behind an interface (`inventory-watcher/internal/osac/client.go` today) so the transport layer is swappable without changing the metering pipeline.
 
 ---
 
-## Metering Model
+## PoC Database Schema
 
-Cost Management must support three billing models:
+Schema is auto-migrated on inventory-watcher startup (inline SQL in `inventory-watcher/internal/inventory/store.go`; no separate migration tool or `data-model.md` yet).
 
-| Resource Type | Metering | Unit |
-|---|---|---|
-| Cluster (CaaS) | Capacity-based | cluster-month |
-| VM (VMaaS) | Capacity-based | VM-month |
-| Model (MaaS) | Consumption-based | per-million-tokens, per-million-requests |
-| Bare Metal (BMaaS) | TBD | TBD |
+| Table | Role |
+|---|---|
+| `raw_events` | Immutable event log; dedup on `event_id` |
+| `inventory_project` | Project inventory |
+| `inventory_compute_instance` | VM inventory; `last_metered_at` sweep cursor |
+| `inventory_cluster` | Cluster inventory; `node_sets` JSONB |
+| `inventory_instance_type` | Spec catalog for rate/summary lookup |
+| `metering_entries` | Per-sweep meter increments |
+| `daily_usage_summary` | Daily rollups (compute instances only) |
 
-### Capacity-Based (CaaS / VMaaS)
+**Tenant model:** there is no separate tenants table. `tenant` is a string column on inventory rows; `tenant_id` appears on `raw_events` and `metering_entries`. Tenant events are logged to `raw_events` only (no inventory table).
 
-Charge is based on what was provisioned, not what was used. The key metrics are:
-- **Control plane uptime**: `SUM(duration_seconds)` where `host_type = _control_plane`
-- **Worker node time**: `SUM(worker_node_seconds)` grouped by `host_type`
-- **Peak worker count**: `MAX(node_count)` per cluster per `host_type`
+---
 
-### Consumption-Based (MaaS)
+## inventory-watcher Workers
 
-Charge is based on actual usage:
-- Tokens in / tokens out / inference tokens
-- Number of requests
-- Per-million-token or per-million-request rates (tiered)
+Four goroutines run concurrently via `errgroup` in `cmd/consumer/main.go`:
+
+| Worker | On startup | Interval | Role |
+|---|---|---|---|
+| **Watcher** | Connect immediately | Continuous stream | NDJSON events → raw log + inventory upsert |
+| **Reconciler** | Full sync immediately | `RECONCILE_INTERVAL` (default 1h) | List API diff for missed events |
+| **Meter** | Waits for first tick | 60s (hardcoded) | Capacity meters for billable VMs and clusters |
+| **Summarizer** | Waits for first tick | `SUMMARIZE_INTERVAL` (default 1h) | `daily_usage_summary` for **previous UTC day**, compute instances only |
 
 ---
 
 ## Data Flow
 
+### Watcher event handling
+
+Events use OSAC protobuf-style types (`EVENT_TYPE_OBJECT_CREATED`, etc.) parsed into Go structs — not full CloudEvents envelopes. Dedup field is `event_id` (not `ce_id`).
+
+**Inventory upsert (CREATE/UPDATE):** ComputeInstance, Cluster, InstanceType, Project
+
+**Raw log only (no inventory table):** Tenant, HostType, ClusterTemplate, ComputeInstanceTemplate, Role, RoleBinding
+
+**DELETE:**
+- ComputeInstance → final metering (if billable) + soft delete
+- Cluster → soft delete only (no final cluster metering)
+- Other types → no-op
+
+**PoC gaps:**
+- VM events do not populate `project` or `cluster_id` columns (columns exist but stay empty)
+- List API calls decode the first page only — reconciler may miss resources beyond page 1
+
 ### Inventory Sync
 
-The reconciler periodically diffs OSAC List endpoints against local inventory to catch events missed by the Watch stream:
+The reconciler diffs OSAC List endpoints against local inventory to catch events missed by the Watch stream. Runs on startup and every `RECONCILE_INTERVAL` (default 1h).
 
 ```
-OSAC REST API (reconciler, periodic)
-  GET /cluster_templates  →  populate cluster_templates table
-  GET /clusters           →  populate clusters table
-  GET /cluster_orders     →  populate cluster_orders table
-  GET /compute_instances  →  populate compute_instances table
+OSAC REST API (reconciler)
+  GET /projects           →  UPSERT inventory_project (no deletion sync)
+  GET /compute_instances  →  UPSERT missing; mark deleted if absent locally
+  GET /clusters           →  UPSERT missing; mark deleted if absent locally
+  GET /instance_types     →  UPSERT inventory_instance_type
 ```
+
+**Not synced:** `cluster_templates`, `cluster_orders`, models, bare metal.
+
+**Reconcile vs Watch gap:** clusters created via reconcile omit `node_sets` and `labels` (the watcher path populates them).
 
 ### Metering Pipeline
 
 ```
-OSAC Watch stream event (or Reconciler List diff)
+OSAC Watch event (or Reconciler upsert for missed CREATED)
   │
-  ├── validate & parse CloudEvent (Go structs)
-  ├── INSERT raw_events (dedup on ce_id)
-  ├── UPSERT inventory → clusters / compute_instances / models
+  ├── parse OSAC Event struct
+  ├── INSERT raw_events (dedup on event_id)
+  ├── UPSERT inventory_* (compute_instance, cluster, instance_type, project)
   │
-  └── [60s sweep] if billable state → INSERT metering_entries
+  ├── On DELETE (compute_instance, if billable): final INSERT metering_entries
+  │
+  └── [60s ticker] Meter sweep → INSERT metering_entries, UPDATE last_metered_at
+        ↓
+      [1h ticker] Summarizer → daily_usage_summary (yesterday UTC, VMs only)
         ↓
       [planned] rate lookup → cost_entries
         ↓
       [planned] quota check → alerts → OSAC
 ```
+
+`metering_entries.raw_event_id` is always NULL today — metering is sweep-driven, not event-driven.
 
 ### Alert Flow
 
@@ -235,6 +296,47 @@ quota_consumption > threshold (e.g. 70%)
 
 ---
 
+## Metering Model
+
+See [metering/metering-spec-draft.md](metering/metering-spec-draft.md) for the full capacity-based metering specification.
+
+Cost Management must support three billing models:
+
+| Resource Type | Metering | Target billing unit | PoC status |
+|---|---|---|---|
+| Cluster (CaaS) | Capacity-based | cluster-month | Metered |
+| VM (VMaaS) | Capacity-based | VM-month | Metered |
+| Model (MaaS) | Consumption-based | per-million-tokens, per-million-requests | Not started |
+| Bare Metal (BMaaS) | TBD | TBD | Not started |
+
+### Capacity-Based (CaaS / VMaaS) — PoC implementation
+
+Charge is based on what was provisioned, not what was used. The PoC emits these meters on each 60s sweep (see `inventory-watcher/internal/metering/`):
+
+| Resource | Billable states | Meters emitted |
+|---|---|---|
+| VM | `COMPUTE_INSTANCE_STATE_RUNNING` | `vm_uptime_seconds`, `vm_cpu_core_seconds`, `vm_memory_gib_seconds` |
+| Cluster | `CLUSTER_STATE_READY`, `CLUSTER_STATE_PROGRESSING` | `cluster_uptime_seconds`, `cluster_worker_node_seconds` (sum of `node_set.size × duration` across all node sets) |
+
+Final metering on DELETE is implemented for VMs only (not clusters).
+
+**Not implemented in PoC:**
+- `cluster_worker_node_count` (target metric; see [metering-spec-draft.md](metering/metering-spec-draft.md))
+- Per-`host_type` breakdown for control plane vs workers
+- Koku-style aggregations: `SUM(duration_seconds)` where `host_type = _control_plane`, `MAX(node_count)` per host_type
+
+Target Koku aggregation semantics for production cost reports are documented in [metering/metering-spec-draft.md](metering/metering-spec-draft.md) and [metering/cost_model_metric_feasibility.md](metering/cost_model_metric_feasibility.md).
+
+### Consumption-Based (MaaS)
+
+Charge is based on actual usage:
+- Tokens in / tokens out / inference tokens
+- Number of requests
+- Per-million-token or per-million-request rates (tiered)
+
+Blocked on OSAC MaaS CloudEvent schema.
+
+---
 
 ## Open Questions
 
@@ -243,10 +345,10 @@ quota_consumption > threshold (e.g. 70%)
 | 1 | What transport will OSAC use to send CloudEvents to Cost? | OSAC + Cost | **PoC decided:** Watch stream (Option A). Production Kafka only if multi-consumer fan-out is needed — see ADR-002 |
 | 2 | What Kafka topic names will OSAC use? | OSAC | Open — relevant only if Option C is adopted |
 | 3 | Will OSAC define CloudEvents for MaaS and BMaaS? | OSAC | Open |
-| 4 | Where do quotas/budgets live — OSAC, Cost, or both? | OSAC + Cost | **Decided:** OSAC owns limits; Cost caches via List API — see [alerting/alerting-osac-integration.md](alerting/alerting-osac-integration.md) |
+| 4 | Where do quotas/budgets live — OSAC, Cost, or both? | OSAC + Cost | **Decided:** OSAC owns limits; Cost caches via List API — see [boundary_monitoring/alerting-osac-integration.md](boundary_monitoring/alerting-osac-integration.md) |
 | 5 | Where do cost tiers live — OSAC, Cost, or both? | OSAC + Cost | Open |
-| 6 | How will quota alerts be communicated to OSAC? (Kafka CloudEvents? HTTP callback?) | OSAC + Cost | **Leaning toward:** push + pull — see [alerting/alerting-osac-integration.md](boundary_monitoring/alerting-osac-integration.md); wire formats in [alerting/alerting-spec-draft.md](boundary_monitoring/alerting-spec-draft.md) |
-| 7 | Does OSAC have a concept of projects within tenants that Cost needs to track? | OSAC + Cost | **Resolved:** yes — `projects` table populated; see REQ-3a |
+| 6 | How will quota alerts be communicated to OSAC? (Kafka CloudEvents? HTTP callback?) | OSAC + Cost | **Leaning toward:** push + pull — see [boundary_monitoring/alerting-osac-integration.md](boundary_monitoring/alerting-osac-integration.md); wire formats in [boundary_monitoring/alerting-spec-draft.md](boundary_monitoring/alerting-spec-draft.md) |
+| 7 | Does OSAC have a concept of projects within tenants that Cost needs to track? | OSAC + Cost | **Resolved:** yes — `inventory_project` populated; see REQ-3a |
 | 8 | UI requirements for the data grid? | Cost | TBD |
 
 ---
@@ -258,8 +360,12 @@ quota_consumption > threshold (e.g. 70%)
 - [OSAC Metering Discover POC](https://github.com/masayag/osac-metering-discover-poc)
 - [OSAC Console Mockups](https://heyethankim.github.io/osac-demo/)
 - [docs/dev/local-dev-setup.md](../dev/local-dev-setup.md) — local dev setup guide
+- [docs/demo-scenario-1.md](../demo-scenario-1.md) — end-to-end demo walkthrough
 - [docs/requirements/ai_grid_poc_requirements_brief.md](../requirements/ai_grid_poc_requirements_brief.md) — requirements spike
+- [inventory-watcher/internal/inventory/store.go](../../inventory-watcher/internal/inventory/store.go) — inline DB schema
+- [snippets/test-inventory-watcher.sh](../../snippets/test-inventory-watcher.sh) — E2E test suite
+- [metering/metering-spec-draft.md](metering/metering-spec-draft.md) — capacity-based metering specification
 - [ADR-001: Metering sweep interval](../decisions/001-metering-sweep-interval.md)
 - [ADR-002: Watch stream instead of Kafka](../decisions/002-arguments-against-kafka.md)
-- [alerting/alerting-osac-integration.md](alerting/alerting-osac-integration.md) — quota integration options & ownership (REQ-9, REQ-10)
-- [alerting/alerting-spec-draft.md](alerting/alerting-spec-draft.md) — API/schema draft (after route chosen)
+- [boundary_monitoring/alerting-osac-integration.md](boundary_monitoring/alerting-osac-integration.md) — quota integration options & ownership (REQ-9, REQ-10)
+- [boundary_monitoring/alerting-spec-draft.md](boundary_monitoring/alerting-spec-draft.md) — API/schema draft (after route chosen)

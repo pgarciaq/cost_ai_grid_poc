@@ -1,5 +1,8 @@
 # AI Grid PoC — Cost Management Requirements Summary
 
+> **⚠ Superseded.** This document has been merged into the consolidated requirements reference.
+> The authoritative source of truth is **[poc_requirements_final.md](poc_requirements_final.md)**.
+
 ---
 
 ## Overview
@@ -249,7 +252,7 @@ Support bare metal nodes provisioned through OSAC, including potential standalon
 - OSAC bare metal service is actively being built (confirmed Jun 24)
 - RHCM already supports OpenShift bare metal costing
 - Open question: do we need to support nodes outside OpenShift clusters?
-- Pau to investigate standalone bare metal requirements
+- Standalone bare metal requirements under investigation
 
 **Scope:**
 - IN: Bare metal capacity-based costing via OSAC cloud events
@@ -258,7 +261,7 @@ Support bare metal nodes provisioned through OSAC, including potential standalon
 ---
 
 ### REQ-9 — Quota/Budget Status API
-**Priority:** CRITICAL
+**Priority:** HIGH
 
 Expose a fast API for OSAC to check quota and budget status before allowing resource creation (e.g., "Is this tenant within quota?"). Enforcement remains with OSAC; RHCM provides the data.
 
@@ -293,12 +296,74 @@ Send threshold notifications from RHCM to OSAC when cost/quota consumption hits 
 **Current State:**
 - No back channel from RHCM to OSAC exists today
 - Jun 24 meeting: transport options discussed (webhook, Kafka, cloud events)
-- OSAC archtiect to consult with OSAC working group architect about OSAC alerting capabilities
+- OSAC architect to consult with OSAC working group architect about OSAC alerting capabilities
 - Grace periods for budget overages may be required
 
 **Scope:**
 - IN: Threshold notification mechanism from RHCM to OSAC
 - OUT: Alert UI in RHCM; grace period enforcement (OSAC's responsibility)
+
+---
+
+### REQ-11 — Cost Tiers
+**Priority:** HIGH
+
+Providers set pricing tiers for services. Example: first 20 GiB free, next 100 GiB at $0.08/GiB-month, next 1000 GiB at $0.07/GiB-month. Implement tiered pricing for both capacity-based rates and MaaS consumption-based rates.
+
+**Acceptance Criteria:**
+- Cost tiers configurable per service/resource type
+- Tiered pricing applied to cost calculations
+- Provider can define multiple tiers with different rates
+- Tiers work with both capacity-based and consumption-based models
+
+**Current State:**
+- No tiered pricing support in RHCM today
+- COST-6951 exists in Jira
+- Depends on Price List Lifecycle work (COST-575, COST-7327, COST-7328)
+
+**Scope:**
+- IN: Tiered pricing for capacity-based and MaaS rates
+- OUT: Building a tier management UI; bilateral tier sync with OSAC (manual setup acceptable for PoC)
+
+---
+
+### REQ-12 — Daily OpenShift Virtualization Costs
+**Priority:** TBD
+
+Daily cost calculation for OpenShift Virtualization workloads provisioned through OSAC.
+
+**Acceptance Criteria:**
+- TBD — pending confirmation from Product Management
+
+**Current State:**
+- Requirement pending confirmation; scope and acceptance criteria not yet defined
+
+**Scope:**
+- TBD — Confirm with Product Management
+
+---
+
+### REQ-13 — Custom Metrics / Custom Rates
+**Priority:** HIGH
+
+Ability to create a custom rate from a custom metric collected by OSAC. When a new dimension should be metered, the service provider defines it (in OSAC or Cost Management — TBD), and CloudEvents are emitted for Cost Management to consume.
+
+**Acceptance Criteria:**
+- Custom metrics can be defined and consumed by RHCM
+- CloudEvents for custom metrics identified by RHCM (via ID, classification, or rate name)
+- Custom rates applied to cost calculations
+- Provider-configurable
+
+**Current State:**
+- No custom metric rate support exists in RHCM today
+- COST-3549 exists in Jira
+
+**Open Questions:**
+- Who defines new dimensions to collect: OSAC or Cost team?
+- Where in OSAC or Cost Management are new dimensions configured?
+
+**Scope:**
+- TBD — Confirm with Product Management
 
 ---
 
@@ -316,6 +381,9 @@ The following items require new epics or stories and have no existing implementa
 | 6 | REQ-8 | Bare Metal Costing (OSAC Bare Metal Service) | Consume bare metal service cloud events from OSAC. Investigate support for standalone bare metal nodes outside OpenShift clusters. |
 | 7 | REQ-9 | Quota/Budget Status API | Expose a fast API for OSAC to check tenant quota/budget status before resource creation. Source of truth to be agreed. |
 | 8 | REQ-10 | Notification/Alert Back Channel to OSAC | Send threshold notifications (50%, 70%, 90%, 100%) from RHCM to OSAC. Transport (webhook, Kafka, cloud events) and format TBD. |
+| 9 | REQ-11 | Cost Tiers | Implement tiered pricing for capacity-based and MaaS rates. Tiers configurable per resource type. Depends on Price List Lifecycle work (COST-575, COST-7327, COST-7328). |
+| 10 | REQ-12 | Daily OpenShift Virtualization Costs | Daily cost calculation for OpenShift Virtualization workloads. TBD — pending Product Management confirmation. |
+| 11 | REQ-13 | Custom Metrics / Custom Rates | Consume arbitrary CloudEvent dimensions as configurable rate inputs. New dimensions defined by the service provider with CloudEvents emitted to Cost Management. |
 
 ### PoC Simplifications
 
@@ -385,7 +453,7 @@ Track token dimensions (input, output, cached, reasoning) and GPU compute metric
 - Hardware compute metrics covered
 - Token details partially available via vLLM usage API
 - Custom IPP plugins may be needed
-- This is Yaron's workstream, separate from capacity PoC
+- This is a separate workstream from the capacity-based PoC
 
 **Scope:**
 - Moved from PoC Requirements

@@ -1,5 +1,7 @@
 # Cost Reports Feasibility with OSAC
 
+> **See also:** [metering-spec-draft.md](metering-spec-draft.md) — how metering is implemented for the PoC.
+
 ## Context
 
 OSAC fulfillment-service manages bare-metal and virtual infrastructure — compute
