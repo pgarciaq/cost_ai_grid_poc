@@ -349,7 +349,9 @@ Support bare metal nodes provisioned through OSAC (BMaaS), including potential s
 ### REQ-9 — Quota/Budget Status API
 **Priority:** HIGH
 
-Expose a fast API for OSAC to check quota and budget status before allowing resource creation (e.g., "Is this tenant within quota?"). Enforcement remains with OSAC; RHCM provides the data.
+Provide a workflow to allow OSAC to check quota and budge status before allowing resource creation.
+
+(e.g., "Is this tenant within quota?"). Enforcement remains with OSAC; RHCM provides the data.
 
 **Definitions:**
 - **Quota** = dimensional limit (CPU core-hours, GiB RAM-hour, tokens, etc.). Providers set quotas for tenants based on accumulated metered consumption over a period.
