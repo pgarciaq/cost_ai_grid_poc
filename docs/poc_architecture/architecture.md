@@ -70,9 +70,9 @@ When running the full stack locally, services are assigned ports to avoid confli
 | OSAC metrics | 8012 | |
 | OSAC OIDC server | 8013 | Local JWT signing; `inventory-watcher/scripts/oidc_server.py` + `gen_token.py` |
 | OSAC PostgreSQL | 5433 | |
-| **inventory-watcher** | — | **Implemented** — Go binary (`inventory-watcher/cmd/consumer`); no listen port. Four concurrent workers — see [inventory-watcher Workers](#inventory-watcher-workers). Persists to POC PostgreSQL `:5434`. Auth: `OSAC_TOKEN` Bearer JWT against `:8011`. Go module logs as `cost-event-consumer`; built artifact is typically named `inventory-watcher`. |
+| **inventory-watcher** | — | **Implemented** — Go binary (`inventory-watcher/cmd/consumer`); no dedicated listen port (HTTP ingest optional on `INGEST_LISTEN_ADDR`). Six concurrent workers — see [inventory-watcher Workers](#inventory-watcher-workers). Persists to POC PostgreSQL `:5434`. Auth: `OSAC_TOKEN` Bearer JWT against `:8011`. Go module logs as `cost-event-consumer`; built artifact is typically named `inventory-watcher`. |
 | **POC PostgreSQL** | **5434** | Cost inventory DB (`costdb`); schema auto-migrated by inventory-watcher on startup |
-| **POC** | **8020** | Planned REST API |
+| **POC HTTP Ingest** | **8020** | **Implemented** (optional) — `POST /api/v1/events` (CloudEvent receiver), `GET /api/v1/quotas/{tenant_id}` (quota status), `GET /api/v1/health`; activated when `INGEST_LISTEN_ADDR=:8020` |
 | POC Kafka | 9092 | Optional — only needed for Option C |
 
 ### inventory-watcher configuration
@@ -85,6 +85,8 @@ When running the full stack locally, services are assigned ports to avoid confli
 | `INVENTORY_DB_URL` | `postgres://user:pass@localhost:5434/costdb` | POC DB |
 | `RECONCILE_INTERVAL` | `1h` | Reconciler ticker |
 | `SUMMARIZE_INTERVAL` | `1h` | Summarizer ticker |
+| `LOG_LEVEL` | `debug` | Log verbosity (`debug`, `info`, `warn`, `error`) |
+| `INGEST_LISTEN_ADDR` | (empty — disabled) | Activate HTTP ingest server on this address (e.g. `localhost:8020` or `:8020`) |
 
 Meter sweep interval is **60s**, hardcoded in `cmd/consumer/main.go` (not env-configurable).
 
@@ -114,10 +116,10 @@ The hierarchy above is the full OSAC model. **inventory-watcher** tracks only a 
 | Cluster (CaaS) | Yes | Yes |
 | Project | Yes (reconcile + events) | N/A |
 | InstanceType | Yes (lookup catalog) | N/A |
-| Model (MaaS) | No | No |
+| Model (MaaS) | **Partial** — `inventory_model` table populated via HTTP ingest CloudEvents (`osac.model.lifecycle`) | **Partial** — `maas_tokens_in`, `maas_tokens_out`, `maas_requests` emitted via `MeterMaaSEvent` on ingest; OSAC schema TBD |
 | BareMetal (BMaaS) | No | No |
 
-MaaS consumption and BMaaS remain planned / blocked on OSAC schema.
+MaaS inventory and consumption metering are operational via the HTTP ingest path when `INGEST_LISTEN_ADDR` is set and `osac.model.lifecycle` CloudEvents are posted to `POST /api/v1/events`. The `maas-simulator` tool can generate test events. BMaaS remains blocked on OSAC schema.
 
 The OSAC fulfillment service exposes these via gRPC (`osac.public.v1`) with a REST gateway:
 
@@ -205,7 +207,12 @@ Schema is auto-migrated on inventory-watcher startup (inline SQL in `inventory-w
 | `inventory_compute_instance` | VM inventory; `last_metered_at` sweep cursor |
 | `inventory_cluster` | Cluster inventory; `node_sets` JSONB |
 | `inventory_instance_type` | Spec catalog for rate/summary lookup |
-| `metering_entries` | Per-sweep meter increments |
+| `inventory_model` | Model (MaaS) inventory; populated via HTTP ingest CloudEvents |
+| `metering_entries` | Per-sweep / per-event meter increments |
+| `rates` | Rate records; seeded on startup; supports flat and tiered pricing |
+| `rate_tiers` | Tier bands for tiered rate evaluation (schema defined, flat rates used for PoC) |
+| `cost_entries` | Rated cost rows linked to `metering_entries` and `rates`; produced by the Rater worker |
+| `quotas` | Per-tenant quota limits; seeded on startup for demo tenants |
 | `daily_usage_summary` | Daily rollups (compute instances only) |
 
 **Tenant model:** there is no separate tenants table. `tenant` is a string column on inventory rows; `tenant_id` appears on `raw_events` and `metering_entries`. Tenant events are logged to `raw_events` only (no inventory table).
@@ -214,7 +221,7 @@ Schema is auto-migrated on inventory-watcher startup (inline SQL in `inventory-w
 
 ## inventory-watcher Workers
 
-Four goroutines run concurrently via `errgroup` in `cmd/consumer/main.go`:
+Six goroutines run concurrently via `errgroup` in `cmd/consumer/main.go`:
 
 | Worker | On startup | Interval | Role |
 |---|---|---|---|
@@ -222,6 +229,8 @@ Four goroutines run concurrently via `errgroup` in `cmd/consumer/main.go`:
 | **Reconciler** | Full sync immediately | `RECONCILE_INTERVAL` (default 1h) | List API diff for missed events |
 | **Meter** | Waits for first tick | 60s (hardcoded) | Capacity meters for billable VMs and clusters |
 | **Summarizer** | Waits for first tick | `SUMMARIZE_INTERVAL` (default 1h) | `daily_usage_summary` for **previous UTC day**, compute instances only |
+| **Rater** | Waits for first tick | 30s (hardcoded) | Processes unrated `metering_entries` → `cost_entries` using `rates` table |
+| **HTTP Ingest** | Start immediately (optional) | Continuous | CloudEvent receiver (`POST /api/v1/events`), quota status API (`GET /api/v1/quotas/{tenant_id}`), health endpoint; only started when `INGEST_LISTEN_ADDR` is set |
 
 ---
 
@@ -273,14 +282,14 @@ OSAC Watch event (or Reconciler upsert for missed CREATED)
   │
   └── [60s ticker] Meter sweep → INSERT metering_entries, UPDATE last_metered_at
         ↓
+      [30s ticker] Rater → FindRate → INSERT cost_entries (metering_entries → rates → cost_entries)
+        ↓
       [1h ticker] Summarizer → daily_usage_summary (yesterday UTC, VMs only)
         ↓
-      [planned] rate lookup → cost_entries
-        ↓
-      [planned] quota check → alerts → OSAC
+      [planned] quota check → threshold alerts → OSAC
 ```
 
-`metering_entries.raw_event_id` is always NULL today — metering is sweep-driven, not event-driven.
+`metering_entries.raw_event_id` is always NULL for sweep-driven entries — set only when metering originates from an HTTP-ingested CloudEvent.
 
 ### Alert Flow
 
@@ -306,8 +315,8 @@ Cost Management must support three billing models:
 |---|---|---|---|
 | Cluster (CaaS) | Capacity-based | cluster-month | Metered |
 | VM (VMaaS) | Capacity-based | VM-month | Metered |
-| Model (MaaS) | Consumption-based | per-million-tokens, per-million-requests | Not started |
-| Bare Metal (BMaaS) | TBD | TBD | Not started |
+| Model (MaaS) | Consumption-based | per-million-tokens, per-million-requests | **Partial** — ingest, inventory, and token meters implemented; OSAC event schema TBD |
+| Bare Metal (BMaaS) | TBD | TBD | Not started — blocked on OSAC schema |
 
 ### Capacity-Based (CaaS / VMaaS) — PoC implementation
 

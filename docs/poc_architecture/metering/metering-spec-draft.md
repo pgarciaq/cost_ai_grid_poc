@@ -2,7 +2,7 @@
 
 > **Status:** PoC draft
 > **Requirements:** POC-ARCH, REQ-1b, REQ-2, REQ-1a
-> **Related:** [architecture.md](../architecture.md) · [event-types.md](../event-types.md) · [data-model.md](../data-model.md) · [cost-calculation-spec-draft.md](../pricing/cost-calculation-spec-draft.md) · [cost_model_metric_feasibility.md](cost_model_metric_feasibility.md) · [cost-reports-feasibility.md](cost-reports-feasibility.md)
+> **Related:** [architecture.md](../architecture.md) · [event-types.md](../event-types.md) · [cost-calculation-spec-draft.md](../pricing/cost-calculation-spec-draft.md) · [cost_model_metric_feasibility.md](cost_model_metric_feasibility.md) · [cost-reports-feasibility.md](cost-reports-feasibility.md)
 
 ---
 
@@ -56,7 +56,7 @@ The Watch stream alone is insufficient: it emits on state transitions (CREATED/U
 
 ### 3.3 Immutable Audit Trail
 
-Every metering increment is stored as a row in `metering_entries`, linked to the source event (when applicable) or sweep timestamp. Raw events are never modified after insert. See [data-model.md](../data-model.md).
+Every metering increment is stored as a row in `metering_entries`, linked to the source event (when applicable) or sweep timestamp. Raw events are never modified after insert. 
 
 ---
 
@@ -78,7 +78,7 @@ flowchart TB
 
     subgraph watcher [inventory-watcher — Cost Management PoC]
         ingest["Event ingestion\n+ inventory upsert"]
-        reconciler["Reconciler\n(List diff, every 5m)"]
+        reconciler["Reconciler\n(List diff, every 1h)"]
         sweep["60s metering sweep\nlocal substitute for heartbeat events"]
         final["Final metering on DELETE\nMeterComputeInstanceFinal()"]
     end
@@ -104,7 +104,7 @@ flowchart TB
 | Component | Interval | Role |
 |---|---|---|
 | Watch stream | Real-time | State transitions → inventory upsert, raw event log |
-| Reconciler | Configurable (default 5m) | Catch missed Watch events via List API diff |
+| Reconciler | Configurable (default 1h) | Catch missed Watch events via List API diff |
 | Metering sweep | **60s** ([ADR-001](../../decisions/001-metering-sweep-interval.md)) | Produce time-based metering for all billable resources |
 | Final metering | On DELETE | Capture usage from `last_metered_at` to exact deletion timestamp |
 
@@ -128,7 +128,7 @@ flowchart TB
 
     subgraph costmgmt [Cost Management — Phase 4]
         ingest["Event ingestion\n+ inventory upsert"]
-        reconciler["Reconciler\n(List diff, every 5m)"]
+        reconciler["Reconciler\n(List diff, every 1h)"]
         hb_consumer["Heartbeat CloudEvent consumer\nHTTP · gRPC · Kafka — TBD"]
         dedup["Deduplicate on ce_id"]
         sweep["60s sweep\n(DISABLED in Phase 4)"]
@@ -250,7 +250,7 @@ OSAC event or 60s sweep
   ├─► On DELETE (if previously billable):
   │     INSERT final metering_entries (last_metered_at → deleted_at)
   │
-  └─► [planned] Rate lookup → INSERT cost_entries
+  └─► [30s Rater] Rate lookup → INSERT cost_entries
         └─► [planned] Quota evaluation → alerts → OSAC
 ```
 
@@ -340,11 +340,12 @@ All metering entries carry `tenant_id`. Project attribution comes from the inven
 | **1a** | Inventory sync + metering sweep for VMs | Implemented |
 | **1b** | Cluster metering (`cluster_uptime_seconds`, `cluster_worker_node_seconds`) | Implemented |
 | **1c** | Final metering on DELETE | Implemented (VMs) |
-| **2** | Cost calculation (`metering_entries` → `cost_entries`) | Planned |
+| **2** | Cost calculation (`metering_entries` → `cost_entries`) | **Implemented** — Rater worker (30s sweep), flat + tiered rate support, `rates` and `cost_entries` tables |
+| **2b** | MaaS CloudEvent ingest + token-based metering | **Partial** — `POST /api/v1/events` handles `osac.model.lifecycle`; `maas_tokens_in/out`, `maas_requests` meters emitted; OSAC event schema TBD |
 | **3** | Cost reports API (tenant/project drill-down) | Planned |
 | **4** | Switch to OSAC heartbeat CloudEvents (retire sweep) | Blocked on OSAC collector |
 | **5** | Bare metal metering | Blocked on OSAC BMaaS schema |
-| **6** | Quota evaluation + threshold alerts | Planned — see [alerting-spec-draft.md](../boundary_monitoring/alerting-spec-draft.md) |
+| **6** | Quota evaluation + threshold alerts | **Partial** — quota pull API (`GET /api/v1/quotas/{tenant_id}`) implemented; push alerts planned — see [alerting-spec-draft.md](../boundary_monitoring/alerting-spec-draft.md) |
 
 ---
 

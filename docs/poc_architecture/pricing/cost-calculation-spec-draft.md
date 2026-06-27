@@ -106,7 +106,7 @@ for tier in rate_tiers ordered by tier_order:
 
 ### 4.4 PoC Scope
 
-For the PoC, flat rates (no tiers) are sufficient. The tier schema is defined to avoid a breaking migration later. Tier evaluation logic is implemented but not activated until rates with multiple tiers are seeded.
+For the PoC, flat rates (no tiers) are sufficient. The tier schema is defined to avoid a breaking migration later. Tier evaluation logic is implemented and active — flat-rate seeds have no tiers, so the tiered path is exercised only when rates with multiple tier rows are present.
 
 ---
 
@@ -195,7 +195,7 @@ Response format follows Koku's hierarchical JSON structure (`meta` / `data` / `t
 | Cost calculation after metering | ≤ 60s | REQ-2 |
 | End-to-end (OSAC emit → cost available) | ≤ 90s | REQ-2 |
 
-Cost calculation runs as a follow-on step after each metering sweep: metering entries from the sweep are rated immediately using cached rates to meet the 90s E2E SLA.
+Cost calculation runs as an independent 30s sweep (Rater worker): it processes all unrated `metering_entries` in batches of 500 using cached rates. This is asynchronous from the metering sweep — any entry written by the 60s Meter sweep will be rated within the next Rater tick (~30s), satisfying the 90s E2E SLA.
 
 ---
 
@@ -203,10 +203,10 @@ Cost calculation runs as a follow-on step after each metering sweep: metering en
 
 | Phase | Deliverable | Status |
 |---|---|---|
-| **2** | Cost calculation (`metering_entries` → `cost_entries`) | Planned |
+| **2** | Cost calculation (`metering_entries` → `cost_entries`) | **Implemented** — `rating.go` Rater worker runs on a 30s sweep; processes up to 500 unrated entries per sweep; writes `cost_entries` |
 | **3** | Cost reports API (tenant/project drill-down) | Planned |
-| **MaaS** | MaaS CloudEvent ingestion + token-based cost | Blocked on OSAC/RHOAI collector (REQ-4) |
-| **Tiers** | Tiered rate evaluation for capacity + MaaS | Planned — schema defined, logic inactive |
+| **MaaS** | MaaS CloudEvent ingestion + token-based cost | **Partial** — `POST /api/v1/events` handles `osac.model.lifecycle`; `maas_tokens_in`, `maas_tokens_out`, `maas_requests` meters written and rated; OSAC/RHOAI event schema TBD |
+| **Tiers** | Tiered rate evaluation for capacity + MaaS | **Implemented** — `applyTieredRate` in `rating.go` is active; flat rates used for PoC seeds |
 
 ---
 

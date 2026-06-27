@@ -1,7 +1,7 @@
 # ADR-003: Heartbeat Events vs. Local Sweep — What They Are, How the PoC Works, and What OSAC Must Deliver
 
 ## Status
-Accepted (PoC) — Phase 4 handoff required for production
+Accepted (PoC) — HTTP ingest path **implemented**; Phase 4 now requires OSAC URL redirect only
 
 ---
 
@@ -44,7 +44,9 @@ This is a **separate set of shell scripts** that poll the fulfillment service RE
 
 These scripts exist and work, but they currently send their output to **OpenMeter**, not to Cost Management. They are not connected to the PoC and are not required for the demo.
 
-The CloudEvent schemas in [event-types.md](../poc_architecture/event-types.md) describe what this collector emits — they are the **target format** for Phase 4, not what the PoC receives today.
+The CloudEvent schemas in [event-types.md](../poc_architecture/event-types.md) describe what this collector emits — they are the **target format** for Phase 4, not what the PoC receives today via the Watch stream.
+
+**Update (Jun 27, 2026):** The PoC's `POST /api/v1/events` HTTP ingest endpoint now accepts all three CloudEvent types in the exact format the OSAC metering collector emits. Pre-calculated values (`duration_seconds`, `cpu_core_seconds`, `memory_gib_seconds`, `worker_node_seconds`) are written directly to `metering_entries` without local recalculation. `last_metered_at` is updated on receipt to prevent the local sweep from double-counting the same interval. Switching the collector's target from OpenMeter to Cost Management requires only a URL change — no format translation or schema changes needed on either side.
 
 ### Summary
 
@@ -53,7 +55,7 @@ The CloudEvent schemas in [event-types.md](../poc_architecture/event-types.md) d
 | Format | Fulfillment service protobuf/JSON (not CloudEvents) | CloudEvents 1.0 structured JSON |
 | Trigger | Resource state change | Timer (~60s) |
 | Contains metering quantities? | No | Yes (`duration_seconds`, `cpu_core_seconds`, etc.) |
-| Connected to Cost Management PoC? | **Yes** | No |
+| Connected to Cost Management PoC? | **Yes** | **Partially** — HTTP ingest endpoint accepts the collector's format; collector still sends to OpenMeter today |
 | Purpose | Inventory sync | Metering / capacity billing |
 
 The local sweep described below exists precisely because the Watch stream alone cannot drive billing — it only fires on state changes — and the POC metering collector is not yet connected.
@@ -133,45 +135,50 @@ The output is identical — same `metering_entries` rows, same meter names, same
 
 Three things are required before the sweep can be retired and replaced by heartbeat events:
 
-### 1. Connect the metering collector to Cost Management
+### 1. Redirect the metering collector to Cost Management
 
-The OSAC metering collector (already prototyped) must be configured to emit its CloudEvents to a Cost Management HTTP endpoint (or Kafka topic — see below) rather than to OpenMeter.
+~~The OSAC metering collector must be configured to emit its CloudEvents to a Cost Management HTTP endpoint.~~
 
-The event schemas it produces today (`osac.cluster.lifecycle` and `osac.compute_instance.lifecycle`) already match the schemas defined in [event-types.md](../poc_architecture/event-types.md). No schema changes are required for CaaS and VMaaS.
+**This is now ready on the Cost Management side.** The `POST /api/v1/events` endpoint accepts `osac.cluster.lifecycle`, `osac.compute_instance.lifecycle`, and `osac.model.lifecycle` in the exact format the collector already emits. Pre-calculated values are ingested directly; `last_metered_at` is updated to prevent double-counting with the local sweep.
+
+**Required OSAC action:** change the collector's target URL from the OpenMeter endpoint to the Cost Management ingest endpoint. No schema changes, no format translation.
 
 ### 2. Agree on transport and interval
 
 | Open question | Options | Decision needed by |
 |---|---|---|
-| Transport | HTTP push to Cost Management endpoint vs. Kafka topic | OSAC + Cost (see R-6) |
+| Transport | **HTTP push to `POST /api/v1/events`** (endpoint exists and is verified) vs. Kafka topic | OSAC + Cost (see R-6) — HTTP path is now the path of least resistance |
 | Interval | Requirements say 10–30s; existing collector uses 60s | OSAC + Cost (see R-5) |
 
 ### 3. Deliver MaaS and BMaaS schemas (separate from the sweep)
 
-The sweep covers CaaS and VMaaS today. MaaS and BMaaS heartbeat events require OSAC to define and commit to CloudEvent schemas that do not yet exist (see R-1 through R-4 in [event-types.md](../poc_architecture/event-types.md)).
+The ingest endpoint already handles `osac.model.lifecycle` (MaaS). BMaaS heartbeat events require OSAC to define and commit to a CloudEvent schema that does not yet exist (see R-3, R-4 in [event-types.md](../poc_architecture/event-types.md)).
 
 ---
 
-## What Cost Management Must Do When Heartbeat Events Arrive (Phase 4)
+## What Cost Management Has Done (Phase 4 — ingestion side complete)
 
-When OSAC begins delivering heartbeat CloudEvents, Cost Management will:
+The `POST /api/v1/events` ingest endpoint, implemented in `inventory-watcher/internal/ingest/handler.go`, already performs all five steps:
 
-1. Receive the event via HTTP endpoint or Kafka consumer
-2. Deduplicate on `ce_id` (already stored in `raw_events`)
-3. Extract `duration_seconds` and metering quantities directly from the event payload
-4. Write `metering_entries` rows — same schema, same meter names as today
-5. Update `last_metered_at` on the inventory record
+1. ✅ Receives the event via HTTP (`POST /api/v1/events`, CloudEvents 1.0 JSON)
+2. ✅ Deduplicates on `ce_id` (stored in `raw_events`)
+3. ✅ Extracts `duration_seconds` and pre-calculated metering quantities directly from the event payload
+4. ✅ Writes `metering_entries` rows — same schema, same meter names as the local sweep
+5. ✅ Updates `last_metered_at` on the inventory record (prevents sweep double-counting)
 
-**The sweep is then disabled.** The `metering_entries` table, meter names, cost calculation pipeline, and reports are all unchanged. Only the producer of the metering entries changes.
+Inventory is auto-created (or upserted) from the event payload if no prior record exists — no pre-registration required.
+
+**The sweep is disabled per-resource** once `last_metered_at` is kept current by incoming heartbeat events. In practice, disabling the sweep globally should wait until the collector is delivering reliably and all resources are covered — a gradual transition is possible.
 
 ---
 
 ## Consequences
 
 - The PoC is fully unblocked — no dependency on OSAC heartbeat delivery for the demo.
-- Phase 4 requires a cross-team handoff: OSAC connects the collector; Cost Management exposes an ingestion endpoint and disables the sweep.
-- The transition is low-risk — both producer patterns write to the same table with the same schema. If heartbeat events are delayed, the sweep can continue running in parallel until the transition is validated.
+- **The Phase 4 handoff scope is now minimal on the Cost Management side:** the ingest endpoint exists, accepts the collector's format, and is verified against all three event types. OSAC's action is a URL redirect in the collector configuration.
+- The transition is low-risk — both producer patterns (sweep and HTTP ingest) write to the same `metering_entries` table with the same schema. The two paths can run in parallel during a validation period: events received via HTTP set `last_metered_at`, causing the sweep to skip those resources automatically (no double-counting).
 - Timing accuracy improves in production: the sweep has ±60s precision; the collector knows exactly when state changed.
+- MaaS events (`osac.model.lifecycle`) are already handled end-to-end via HTTP ingest. BMaaS remains blocked on OSAC defining the CloudEvent schema.
 
 ---
 
