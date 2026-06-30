@@ -9,10 +9,10 @@
 | Priority | Total | Done | Partial | Not Started |
 |---|---|---|---|---|
 | CRITICAL | 5 | 4 | 0 | 1 |
-| HIGH | 8 | 4 | 2 | 2 |
+| HIGH | 8 | 5 | 2 | 1 |
 | MEDIUM | 2 | 0 | 2 | 0 |
 | Must Have | 1 | 1 | 0 | 0 |
-| **Total** | **16** | **9** | **4** | **3** |
+| **Total** | **16** | **10** | **4** | **2** |
 
 ## Full Requirements Status
 
@@ -30,7 +30,7 @@
 | REQ-3b | MEDIUM | Service catalog sync | Partial | — | Instance types synced, rates manual |
 | REQ-4 | HIGH | Token metering | **Done** (mock) | OSAC MaaS schema | [req2 gap analysis](req2-maas-costing-gap-analysis.md) |
 | REQ-5 | MEDIUM | Chargeback reporting | Partial | — | SQL queries, no formatted export |
-| REQ-8 | HIGH | Bare metal costing | Not started | OSAC: not in Watch `oneof` | [req8 gap analysis](req8-bare-metal-gap-analysis.md) |
+| REQ-8 | HIGH | Bare metal costing | **Done** | Watch `oneof` gap — uses reconciler | [req8 gap analysis](req8-bare-metal-gap-analysis.md) |
 | REQ-9 | HIGH | Quota/budget status API | **Done** | — | `GET /api/v1/quotas/{tenant_id}` |
 | REQ-10 | HIGH | Threshold notifications | **Done** (pull) | Webhook push deferred | [req10 analysis](req10-threshold-notifications-analysis.md) |
 | REQ-11 | MUST HAVE | Cost tiers | **Done** | — | Tiered pricing in rate engine |
@@ -41,7 +41,7 @@
 
 | Req | Priority | Title | Status | Notes |
 |---|---|---|---|---|
-| REQ-6 | STANDARD | Security & access control | N/A | In-product |
+| REQ-6 | STANDARD | Security & access control | Partial | Authn done, authz gap |
 | REQ-7 | STANDARD | Reconciliation & auditing | Partial | `raw_events` = immutable audit trail |
 
 ---

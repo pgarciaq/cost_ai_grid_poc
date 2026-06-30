@@ -46,7 +46,7 @@ Needs hardening before production.
 |---|-------|----------|-----------|--------|
 | 1 | No authentication on API endpoints | Critical | Security | Open |
 | 2 | Silent error swallowing in ingest handlers | Critical | Correctness | Open |
-| 3 | Missing pagination in OSAC List calls | Critical | Correctness | Open |
+| 3 | Missing pagination in OSAC List calls | Critical | Correctness | **Fixed** |
 | 4 | Hardcoded default database credentials | High | Security | Accepted (PoC) |
 | 5 | No request size limits or timeouts on HTTP server | High | Operational | Open |
 | 6 | Division by zero in rating threshold evaluation | High | Correctness | Open |
@@ -395,14 +395,15 @@ pre-commit hooks. Tests exist but are not enforced.
 | Category | Count |
 |---|---|
 | Total findings | 17 |
-| Fixed | 8 (#1, #2, #5, #6, #7, #10, #11, #12) |
+| Fixed | 9 (#1, #2, #3, #5, #6, #7, #10, #11, #12) |
 | Accepted | 3 (#4, #8, #16) |
-| Open | 6 (#3, #9, #13, #14, #15, #17) |
+| Open | 5 (#9, #13, #14, #15, #17) |
 
 ### Fixes Applied (v1.1, 2026-06-30)
 
 - **#1** No auth → JWT middleware compatible with OSAC (authn only; authz gap documented)
 - **#2** Error swallowing → handlers return errors; 500 on failure
+- **#3** Missing pagination → offset/limit loop, 100 per page, until total reached
 - **#5** HTTP limits → ReadTimeout 10s, WriteTimeout 10s, MaxBytesReader 1MB
 - **#6** Division by zero → guard `q.LimitValue <= 0`
 - **#7** Input validation → required fields, length caps, unmarshal error handling
