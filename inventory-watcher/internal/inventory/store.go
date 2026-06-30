@@ -586,6 +586,28 @@ func (s *Store) GetInstanceType(ctx context.Context, id string) (*InstanceTypeRe
 	return &rec, nil
 }
 
+// ListAllInstanceTypes returns all instance types for batch lookups.
+func (s *Store) ListAllInstanceTypes(ctx context.Context) ([]InstanceTypeRecord, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT instance_type_id, name, cores, memory_gib, state, last_updated
+		FROM inventory_instance_type
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []InstanceTypeRecord
+	for rows.Next() {
+		var r InstanceTypeRecord
+		if err := rows.Scan(&r.InstanceTypeID, &r.Name, &r.Cores, &r.MemoryGiB, &r.State, &r.LastUpdated); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
 // ListAliveComputeInstances returns all compute instances not yet deleted.
 func (s *Store) ListAliveComputeInstances(ctx context.Context) ([]ComputeInstanceRecord, error) {
 	rows, err := s.pool.Query(ctx, `
