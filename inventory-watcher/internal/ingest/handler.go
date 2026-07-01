@@ -86,6 +86,8 @@ func (h *Handler) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/events", h.handleEvent)
 	mux.HandleFunc("GET /api/v1/quotas/", h.handleQuotaStatus)
+	mux.HandleFunc("GET /api/v1/reports/costs", h.handleCostReport)
+	mux.HandleFunc("GET /api/v1/reports/summary", h.handlePipelineSummary)
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		writeJSON(w, map[string]string{"status": "ok"})
@@ -392,4 +394,114 @@ func (h *Handler) handleQuotaStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, resp)
+}
+
+// ── Cost Report ──
+
+type costReportResponse struct {
+	Meta costReportMeta            `json:"meta"`
+	Data []inventory.CostReportRow `json:"data"`
+}
+
+type costReportMeta struct {
+	Total   costTotal         `json:"total"`
+	Period  string            `json:"period"`
+	GroupBy string            `json:"group_by"`
+	Filters map[string]string `json:"filters"`
+}
+
+type costTotal struct {
+	Cost               float64 `json:"cost"`
+	InfrastructureCost float64 `json:"infrastructure_cost"`
+	SupplementaryCost  float64 `json:"supplementary_cost"`
+	Currency           string  `json:"currency"`
+}
+
+func (h *Handler) handleCostReport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	q := r.URL.Query()
+	tenantID := q.Get("tenant_id")
+	resourceType := q.Get("resource_type")
+	groupBy := q.Get("group_by")
+	if groupBy == "" {
+		groupBy = "tenant"
+	}
+	period := q.Get("period")
+	if period == "" {
+		period = time.Now().UTC().Format("2006-01")
+	}
+
+	periodStart, err := time.Parse("2006-01", period)
+	if err != nil {
+		writeErrorJSON(w, "invalid period format, use YYYY-MM", http.StatusBadRequest)
+		return
+	}
+	periodEnd := periodStart.AddDate(0, 1, 0)
+
+	ctx := r.Context()
+	rows, err := h.store.CostReport(ctx, tenantID, resourceType, groupBy, periodStart, periodEnd)
+	if err != nil {
+		h.logger.Error("cost report query failed", "error", err)
+		writeErrorJSON(w, "report query failed", http.StatusInternalServerError)
+		return
+	}
+	if rows == nil {
+		rows = []inventory.CostReportRow{}
+	}
+
+	var total costTotal
+	total.Currency = "USD"
+	for _, row := range rows {
+		total.Cost += row.Cost
+		total.InfrastructureCost += row.InfrastructureCost
+		total.SupplementaryCost += row.SupplementaryCost
+	}
+
+	filters := map[string]string{}
+	if tenantID != "" {
+		filters["tenant_id"] = tenantID
+	}
+	if resourceType != "" {
+		filters["resource_type"] = resourceType
+	}
+
+	format := q.Get("format")
+	if format == "" && r.Header.Get("Accept") == "text/csv" {
+		format = "csv"
+	}
+
+	if format == "csv" {
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", "attachment; filename=costs.csv")
+		fmt.Fprintln(w, "group,entries,cost,infrastructure_cost,supplementary_cost,currency")
+		for _, row := range rows {
+			fmt.Fprintf(w, "%s,%d,%.6f,%.6f,%.6f,%s\n",
+				row.Group, row.Entries, row.Cost, row.InfrastructureCost, row.SupplementaryCost, row.Currency)
+		}
+		return
+	}
+
+	writeJSON(w, costReportResponse{
+		Meta: costReportMeta{
+			Total:   total,
+			Period:  period,
+			GroupBy: groupBy,
+			Filters: filters,
+		},
+		Data: rows,
+	})
+}
+
+func (h *Handler) handlePipelineSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	ctx := r.Context()
+	summary, err := h.store.PipelineSummary(ctx)
+	if err != nil {
+		h.logger.Error("pipeline summary query failed", "error", err)
+		writeErrorJSON(w, "summary query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, summary)
 }
