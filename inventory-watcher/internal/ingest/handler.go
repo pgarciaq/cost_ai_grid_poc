@@ -578,7 +578,7 @@ func (h *Handler) handlePipelineSummary(w http.ResponseWriter, r *http.Request) 
 // Source: https://github.com/opendatahub-io/ai-gateway-payload-processing/blob/61b6160/pkg/plugins/external-metering/client.go
 
 type entitlementValue struct {
-	HasAccess bool    `json:"has_access"`
+	HasAccess bool    `json:"hasAccess"`
 	Balance   float64 `json:"balance"`
 	Usage     float64 `json:"usage"`
 	Overage   float64 `json:"overage"`

@@ -744,8 +744,10 @@ func TestBalanceCheckResponseFormat(t *testing.T) {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
+	// Field names must match the IPP client's entitlementValue struct (camelCase for hasAccess).
+	// Source: https://github.com/opendatahub-io/ai-gateway-payload-processing/blob/61b6160/pkg/plugins/external-metering/client.go
 	var result struct {
-		HasAccess bool    `json:"has_access"`
+		HasAccess bool    `json:"hasAccess"`
 		Balance   float64 `json:"balance"`
 		Usage     float64 `json:"usage"`
 		Overage   float64 `json:"overage"`

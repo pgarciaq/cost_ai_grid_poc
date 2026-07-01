@@ -146,7 +146,9 @@ Tenant attribution may need Keycloak lookup or event augmentation.
 
 **Not a CloudEvent** — this is a synchronous REST call.
 
-**Source:** IPP external-metering plugin ([client.go](https://github.com/opendatahub-io/ai-gateway-payload-processing/blob/61b6160e8b3c3172353d4c2740f11eb782fb5717/pkg/plugins/external-metering/client.go))
+**Sources:**
+- IPP client: [client.go](https://github.com/opendatahub-io/ai-gateway-payload-processing/blob/61b6160/pkg/plugins/external-metering/client.go)
+- Metering simulator OpenAPI spec: [openapi.yaml](https://github.com/noyitz/metering-simulator/blob/main/openapi.yaml) (saved locally at `docs/specs/maas-metering-openapi.yaml`)
 
 ### Request
 
@@ -183,7 +185,11 @@ GET /api/v1/customers/{customerID}/entitlements/{featureKey}/value?model={model}
 4. Returns `has_access` = (consumed < limit), `balance` = (limit - consumed),
    `usage` = consumed, `overage` = max(0, consumed - limit)
 
-**Effort:** ~40 lines in handler.go — reuses existing store methods.
+**Status:** Implemented. Contract-verified against the metering-simulator
+OpenAPI spec and the IPP client struct tags.
+
+**Note:** Response uses `hasAccess` (camelCase) matching the IPP client.go
+struct tag, not `has_access` (snake_case).
 
 ---
 
