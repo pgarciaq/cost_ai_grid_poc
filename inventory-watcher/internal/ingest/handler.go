@@ -52,6 +52,7 @@ type ClusterEventData struct {
 }
 
 type MaaSEventData struct {
+	// Our mock format fields
 	TenantID        string `json:"tenant_id"`
 	ModelID         string `json:"model_id"`
 	ModelName       string `json:"model_name"`
@@ -61,12 +62,27 @@ type MaaSEventData struct {
 	TokensOut       int64  `json:"tokens_out"`
 	Requests        int64  `json:"requests"`
 	DurationSeconds int    `json:"duration_seconds"`
+	RequestCount    int64  `json:"request_count"`
+	// Real IPP format fields
+	User                string `json:"user"`
+	Group               string `json:"group"`
+	Subscription        string `json:"subscription"`
+	Provider            string `json:"provider"`
+	Model               string `json:"model"`
+	PromptTokens        int64  `json:"prompt_tokens"`
+	CompletionTokens    int64  `json:"completion_tokens"`
+	TotalTokens         int64  `json:"total_tokens"`
+	CachedInputTokens   int64  `json:"cached_input_tokens"`
+	CacheCreationTokens int64  `json:"cache_creation_tokens"`
+	ReasoningTokens     int64  `json:"reasoning_tokens"`
+	DurationMs          int64  `json:"duration_ms"`
 }
 
 const (
-	EventTypeComputeInstance = "osac.compute_instance.lifecycle"
-	EventTypeCluster         = "osac.cluster.lifecycle"
-	EventTypeModel           = "osac.model.lifecycle"
+	EventTypeComputeInstance  = "osac.compute_instance.lifecycle"
+	EventTypeCluster          = "osac.cluster.lifecycle"
+	EventTypeModel            = "osac.model.lifecycle"
+	EventTypeInferenceTokens  = "inference.tokens.used"
 
 	maxRequestBodySize = 1 << 20 // 1MB
 	maxIDLength        = 256
@@ -150,7 +166,7 @@ func (h *Handler) handleEvent(w http.ResponseWriter, r *http.Request) {
 		processingErr = h.handleComputeInstanceEvent(ctx, ce)
 	case EventTypeCluster:
 		processingErr = h.handleClusterEvent(ctx, ce)
-	case EventTypeModel:
+	case EventTypeModel, EventTypeInferenceTokens:
 		processingErr = h.handleModelEvent(ctx, ce)
 	default:
 		h.logger.Warn("unknown CloudEvent type", "type", ce.Type)
@@ -252,6 +268,32 @@ func (h *Handler) handleModelEvent(ctx context.Context, ce CloudEvent) error {
 		return err
 	}
 
+	// Normalize IPP format → our internal format
+	if data.PromptTokens > 0 && data.TokensIn == 0 {
+		data.TokensIn = data.PromptTokens
+	}
+	if data.CompletionTokens > 0 && data.TokensOut == 0 {
+		data.TokensOut = data.CompletionTokens
+	}
+	if data.Model != "" && data.ModelName == "" {
+		data.ModelName = data.Model
+	}
+	if data.Model != "" && data.ModelID == "" {
+		data.ModelID = data.Model
+	}
+	if data.User != "" && data.TenantID == "" {
+		data.TenantID = data.User
+	}
+	if data.DurationMs > 0 && data.DurationSeconds == 0 {
+		data.DurationSeconds = int(data.DurationMs / 1000)
+	}
+	if data.RequestCount > 0 && data.Requests == 0 {
+		data.Requests = data.RequestCount
+	}
+	if data.State == "" {
+		data.State = "MODEL_STATE_RUNNING"
+	}
+
 	createdAt := ce.Time.Add(-time.Duration(data.DurationSeconds) * time.Second)
 	if err := h.store.UpsertModel(ctx, inventory.ModelRecord{
 		ModelID:     data.ModelID,
@@ -267,15 +309,17 @@ func (h *Handler) handleModelEvent(ctx context.Context, ce CloudEvent) error {
 	}
 
 	h.meter.MeterMaaSEvent(ctx, metering.MaaSUsage{
-		ModelID:         data.ModelID,
-		ModelName:       data.ModelName,
-		TenantID:        data.TenantID,
-		State:           data.State,
-		TokensIn:        data.TokensIn,
-		TokensOut:       data.TokensOut,
-		Requests:        data.Requests,
-		EventTime:       ce.Time,
-		DurationSeconds: float64(data.DurationSeconds),
+		ModelID:             data.ModelID,
+		ModelName:           data.ModelName,
+		TenantID:            data.TenantID,
+		State:               data.State,
+		TokensIn:            data.TokensIn,
+		TokensOut:           data.TokensOut,
+		CachedInputTokens:   data.CachedInputTokens,
+		ReasoningTokens:     data.ReasoningTokens,
+		Requests:            data.Requests,
+		EventTime:           ce.Time,
+		DurationSeconds:     float64(data.DurationSeconds),
 	})
 	return nil
 }
@@ -286,6 +330,8 @@ func classifyEvent(ce CloudEvent) (resourceType, resourceID, tenantID string) {
 		InstanceID string `json:"instance_id"`
 		ClusterID  string `json:"cluster_id"`
 		ModelID    string `json:"model_id"`
+		User       string `json:"user"`
+		Model      string `json:"model"`
 	}
 	if err := json.Unmarshal(ce.Data, &peek); err != nil {
 		return ce.Type, "", ce.Subject
@@ -303,6 +349,12 @@ func classifyEvent(ce CloudEvent) (resourceType, resourceID, tenantID string) {
 		return "Cluster", peek.ClusterID, tenantID
 	case EventTypeModel:
 		return "Model", peek.ModelID, tenantID
+	case EventTypeInferenceTokens:
+		rid := peek.ModelID
+		if rid == "" {
+			rid = peek.Model
+		}
+		return "Model", rid, tenantID
 	default:
 		return ce.Type, "", tenantID
 	}
