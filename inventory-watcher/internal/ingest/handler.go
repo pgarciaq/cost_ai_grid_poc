@@ -670,9 +670,15 @@ func (h *Handler) handleLiveness(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
-// handleReadiness implements Kubernetes readiness probe.
-// Returns 200 if the service is ready to accept traffic.
 func (h *Handler) handleReadiness(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := h.store.Pool().Ping(ctx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		writeJSON(w, map[string]string{"status": "not_ready", "error": "database unreachable"})
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	writeJSON(w, map[string]string{"status": "ready"})
 }
