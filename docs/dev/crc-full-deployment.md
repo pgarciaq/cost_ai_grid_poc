@@ -4,19 +4,40 @@ Complete step-by-step guide to deploy the entire stack (OSAC + cost-event-consum
 
 ## Prerequisites
 
-- CRC running (tested with 4.18.0)
-- `kubectl` or `oc` CLI
-- `helm` CLI (3.8+)
-- `jq` for JSON processing
-- `openssl` for generating passwords
+### Required Tools
+
+- **CRC 4.18+**: https://developers.redhat.com/products/openshift-local/overview
+- **kubectl or oc CLI**: Comes with CRC (`eval $(crc oc-env)`)
+- **helm 3.8+**: https://helm.sh/docs/intro/install/
+- **jq**: https://stedolan.github.io/jq/download/
+- **openssl**: Usually pre-installed on macOS/Linux
+
+### CRC Setup
 
 ```bash
 # Verify CRC is running
 crc status
 
-# Login as admin
+# If not running, start it
+crc start
+
+# Configure environment
 eval $(crc oc-env)
+
+# Login as admin (password from: crc console --credentials)
 oc login -u kubeadmin https://api.crc.testing:6443
+```
+
+### Repository Setup
+
+```bash
+# Clone the repository
+cd ~/Projects/koku
+git clone <repo-url> cost_ai_grid_poc
+cd cost_ai_grid_poc
+
+# Checkout the deployment branch
+git checkout openshift-deployment
 ```
 
 ## Architecture
