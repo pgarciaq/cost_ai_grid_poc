@@ -17,10 +17,15 @@ CloudNativePG operator (postgres namespace)
       - service DB (used by OSAC gRPC)
 
 OSAC stack (osac namespace)
+  ├─> osac-oidc (python:3.12-slim + cryptography)
+  │   - Port: 8013 (HTTPS)
+  │   - Serves OIDC discovery + JWKS endpoints
+  │   - Uses osac-grpc-tls certificate
   ├─> osac-grpc (ghcr.io/osac-project/fulfillment-service:main)
   │   - Port: 8010
   │   - Connects to: osac-rw.postgres.svc.cluster.local:5432/service
   │   - Migrations: Handled cleanly by CloudNativePG
+  │   - Trusts tokens from osac-oidc:8013
   └─> osac-rest (ghcr.io/osac-project/fulfillment-service:main)
       - Port: 8000
       - Proxies to osac-grpc:8010
@@ -29,10 +34,9 @@ OSAC stack (osac namespace)
 ## What's Different from Production (INSTALL.md)
 
 **Simplified** (removed for CRC resource constraints):
-- ❌ Keycloak (2 pods) - using unauthenticated mode for testing
+- ❌ Keycloak (2 pods) - using lightweight Python OIDC server instead
 - ❌ Authorino operator - no external auth enforcement
 - ❌ Controller component - not needed for basic API testing
-- ❌ Python OIDC server - not needed without controller
 
 **Kept**:
 - ✅ cert-manager + trust-manager
@@ -46,6 +50,7 @@ OSAC stack (osac namespace)
 |-----------|-----------|---------|------|
 | PostgreSQL (primary) | postgres | osac-rw | 5432 |
 | PostgreSQL (read replicas) | postgres | osac-r, osac-ro | 5432 |
+| OSAC OIDC | osac | osac-oidc | 8013 (HTTPS) |
 | OSAC gRPC | osac | osac-grpc | 8010 |
 | OSAC REST | osac | osac-rest | 8000, 8012 (metrics) |
 
@@ -84,11 +89,22 @@ oc run curl-test --image=curlimages/curl:latest --rm -it --restart=Never -- \
   curl http://osac-rest.osac.svc:8000/api/fulfillment/v1/clusters
 ```
 
-## Known Issues
+## OIDC Server
 
-- OIDC server crashes (missing cryptography dependency in python:3.12-slim)
-  - Not needed for unauthenticated testing
-  - For production, use full Keycloak deployment
+The Python OIDC server provides minimal OIDC discovery and JWKS endpoints:
+- `https://osac-oidc.osac.svc:8013/.well-known/openid-configuration`
+- `https://osac-oidc.osac.svc:8013/.well-known/jwks.json`
+
+It uses the same TLS certificate as osac-grpc (osac-grpc-tls) and is ready
+for token generation when needed. For production, replace with full Keycloak.
+
+Test the endpoints:
+```bash
+kubectl run curl-test --image=curlimages/curl:latest --rm -it --restart=Never -- \
+  curl -k https://osac-oidc.osac.svc:8013/.well-known/openid-configuration
+```
+
+## Known Issues
 
 - REST API /health endpoint returns 404
   - Expected - OSAC uses different health check paths
