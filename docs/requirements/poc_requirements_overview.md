@@ -1,7 +1,7 @@
 # AI Grid PoC — Cost Management Requirements
 
-**Version:** 1.2
-**Date:** June 26, 2026
+**Version:** 1.3
+**Date:** July 2, 2026
 **Status:** Hardening (Still in Flux)
 
 This document is the consolidated requirements reference for the Cost Management AI Grid Proof of Concept. It merges the initial requirements brief with the detailed requirements summary. MaaS (token metering and OpenShift AI cloud events), Cost Tiers, and Custom Metrics are included as in-scope PoC requirements.
@@ -12,7 +12,7 @@ This document is the consolidated requirements reference for the Cost Management
 
 - Sovereign cloud built on OCP, OCP Virtualization, OpenShift AI, ACM, Ansible
 - **OSAC** (Open Sovereign AI Console) is the orchestrator — provisions clusters (HCP), VMs (OpenShift Virtualization), models (MaaS), and bare metal
-- OSAC emits **CloudEvents** for resource lifecycle and metrics; Kafka is the likely transport
+- OSAC emits **CloudEvents** for resource lifecycle and metrics; transport for VM/cluster is gRPC Watch stream + 60s reconciler (Kafka deferred — see [ADR-002](../decisions/002-arguments-against-kafka.md)); MaaS transport pending verification (Martin/Noi)
 - Billing model: **capacity-based** for clusters/VMs; **consumption-based** (token/request) for MaaS
 - No Cost Management Metrics Operator (CMMO) — OSAC is the sole metric source
 - Data freshness SLA: OSAC emits within 30 sec of event; **Cost must process within 60 sec of receipt**
@@ -23,8 +23,8 @@ This document is the consolidated requirements reference for the Cost Management
 ## Requirements
 
 ### POC-ENV — On-Premise Deployment
-**Priority:** CRITICAL
-**Rank:** 1
+**Priority:** CRITICAL &nbsp;·&nbsp; **Rank:** 1
+
 **Component Scope:** OUT OF SCOPE — This requirement covers deploying RHCM on-premise; it is owned by the RHCM/Cost Management team, not the consumer component.
 
 On-prem RHCM deployment to demo capacity-based charging with OSAC heartbeat events. Not all components may be needed.
@@ -45,9 +45,7 @@ On-prem RHCM deployment to demo capacity-based charging with OSAC heartbeat even
 ---
 
 ### POC-ARCH: Capacity-Based Charging Model
-**Priority:** CRITICAL
-[COST-7792](https://redhat.atlassian.net/browse/COST-7792)
-Rank: 2
+**Priority:** CRITICAL &nbsp;·&nbsp; [COST-7792](https://redhat.atlassian.net/browse/COST-7792) &nbsp;·&nbsp; **Rank:** 2
 
 Charge based on what was provisioned (VM size, cluster config) and for how long. No metric scraping, no CSV pipeline changes; existing cost models may partially work. This is a standalone PoC component — a new data path driven by heartbeat events from OSAC.
 
@@ -72,9 +70,7 @@ Charge based on what was provisioned (VM size, cluster config) and for how long.
 ---
 
 ### REQ-1: OSAC Integration via Region Management Cluster
-**Priority:** CRITICAL
-[COST-7793](https://redhat.atlassian.net/browse/COST-7793)
-Rank: 3
+**Priority:** CRITICAL &nbsp;·&nbsp; [COST-7793](https://redhat.atlassian.net/browse/COST-7793) &nbsp;·&nbsp; **Rank:** 3
 
 Connect RHCM to the OSAC Region Management Cluster (gRPC/REST APIs) to read inventory, resource state, and tenant/project hierarchy. All data flows through the management layer, not individual workload clusters.
 
@@ -106,9 +102,7 @@ Connect RHCM to the OSAC Region Management Cluster (gRPC/REST APIs) to read inve
 ---
 
 ### REQ-1b: OSAC Heartbeat Event Ingestion
-**Priority:** CRITICAL
-[COST-7795](https://redhat.atlassian.net/browse/COST-7795)
-Rank: 4
+**Priority:** CRITICAL &nbsp;·&nbsp; [COST-7795](https://redhat.atlassian.net/browse/COST-7795) &nbsp;·&nbsp; **Rank:** 4
 
 Receive heartbeat events from OSAC via HTTP or Kafka (transport TBD per Jun 24 meeting) at configurable intervals (10s–30s). Events contain tenant ID, project ID, resource ID, and hardware config. The first event auto-registers the tenant.
 
@@ -136,9 +130,7 @@ Receive heartbeat events from OSAC via HTTP or Kafka (transport TBD per Jun 24 m
 ---
 
 ### REQ-2: Near-Real-Time Cost Calculation
-**Priority:** CRITICAL
-[COST-7796](https://redhat.atlassian.net/browse/COST-7796)
-Rank: 5
+**Priority:** CRITICAL &nbsp;·&nbsp; [COST-7796](https://redhat.atlassian.net/browse/COST-7796) &nbsp;·&nbsp; **Rank:** 5
 
 Process OSAC heartbeat events and calculate costs within 60 seconds of receipt. End-to-end SLA is 90 seconds. This is a new HTTP data path, not a rework of the CSV pipeline.
 
@@ -162,9 +154,7 @@ Process OSAC heartbeat events and calculate costs within 60 seconds of receipt. 
 ---
 
 ### REQ-1a: OSAC Cluster Lifecycle via Cluster Orders
-**Priority:** HIGH
-[COST-7794](https://redhat.atlassian.net/browse/COST-7794)
-Rank: 6
+**Priority:** HIGH &nbsp;·&nbsp; [COST-7794](https://redhat.atlassian.net/browse/COST-7794) &nbsp;·&nbsp; **Rank:** 6
 
 Monitor OSAC "cluster orders" for state changes (created, running, stopped, destroyed) and calculate cost based on provisioned capacity and duration.
 
@@ -187,9 +177,7 @@ Monitor OSAC "cluster orders" for state changes (created, running, stopped, dest
 ---
 
 ### REQ-3a: OSAC Tenant/Project Attribution
-**Priority:** HIGH
-[COST-7799](https://redhat.atlassian.net/browse/COST-7799)
-Rank: 7
+**Priority:** HIGH &nbsp;·&nbsp; [COST-7799](https://redhat.atlassian.net/browse/COST-7799) &nbsp;·&nbsp; **Rank:** 7
 
 Map OSAC's `Tenant → Project` hierarchy to RHCM's organizational model. All costs attributed to the correct tenant and project.
 
@@ -209,16 +197,18 @@ Map OSAC's `Tenant → Project` hierarchy to RHCM's organizational model. All co
 - Are quotas/budgets scoped per OSAC project?
 - Is RBAC needed for providers viewing cross-project cost data?
 
+> **Decision (Jul 2, 2026):** RBAC scope for PoC is **tenant + project level only**.
+> Fine-grained InsightsRBAC is deferred post-PoC. Project + tenant attribution is
+> already tracked on the event-driven side. Owners: Pau, Moti, Cody. (~00:17:18)
+
 **Scope:**
 - IN: Tenant and project-level cost attribution
-- OUT: Full tenant lifecycle management (onboarding, offboarding)
+- OUT: Full tenant lifecycle management (onboarding, offboarding); fine-grained InsightsRBAC (post-PoC)
 
 ---
 
 ### REQ-3: Granular Cost Tracking
-**Priority:** HIGH
-[COST-7798](https://redhat.atlassian.net/browse/COST-7798)
-Rank: 8
+**Priority:** HIGH &nbsp;·&nbsp; [COST-7798](https://redhat.atlassian.net/browse/COST-7798) &nbsp;·&nbsp; **Rank:** 8
 
 Single system of record for cost data with drill-down by tenant, project, model, and user. Covers both capacity-based (compute hours) and consumption-based (token/request) dimensions.
 
@@ -239,9 +229,7 @@ Single system of record for cost data with drill-down by tenant, project, model,
 ---
 
 ### REQ-9: Quota/Budget Status API
-**Priority:** HIGH
-[COST-7801](https://redhat.atlassian.net/browse/COST-7801)
-Rank: 9
+**Priority:** HIGH &nbsp;·&nbsp; [COST-7801](https://redhat.atlassian.net/browse/COST-7801) &nbsp;·&nbsp; **Rank:** 9
 
 Provide a workflow to allow OSAC to check quota and budge status before allowing resource creation.
 
@@ -275,11 +263,14 @@ Provide a workflow to allow OSAC to check quota and budge status before allowing
 ---
 
 ### REQ-10: Threshold Notification Back Channel to OSAC
-**Priority:** HIGH
-[COST-7807](https://redhat.atlassian.net/browse/COST-7807)
-Rank: 10
+**Priority:** HIGH → **Parked** &nbsp;·&nbsp; [COST-7807](https://redhat.atlassian.net/browse/COST-7807) &nbsp;·&nbsp; **Rank:** 10
 
 Send threshold notifications from RHCM to OSAC when cost/quota consumption hits defined levels (50%, 70%, 90%, 100%). OSAC consumes these notifications to trigger OPA-enforced rate limiting. Transport and format TBD.
+
+> **Decision (Jul 2, 2026):** Parked for now. For MaaS quota enforcement,
+> OSAC already exposes a check-balance API — no separate alert mechanism is needed
+> for the July 31 deadline. The pull model (REQ-9 quota status API) is sufficient.
+> Owners: Moti, Ronnie. (~00:51–00:53)
 
 **Acceptance Criteria:**
 - RHCM sends notifications to OSAC at configurable thresholds
@@ -288,25 +279,23 @@ Send threshold notifications from RHCM to OSAC when cost/quota consumption hits 
 - Notifications delivered reliably (no silent drops)
 
 **Current State:**
-- No back channel from RHCM to OSAC exists today
+- Pull model implemented: `GET /api/v1/quotas/{tenant_id}` returns threshold flags
+- Push (webhook) model deferred — transport not yet agreed with OSAC
 - Jun 24 meeting: transport options discussed (webhook, Kafka, cloud events)
-- OSAC architect to consult with OSAC working group architect about OSAC alerting capabilities
-- Grace periods for budget overages may be required
+- Jul 2 meeting: parked; pull model accepted as sufficient for PoC
 
 **Open Questions:**
-- Does OSAC have an existing alerting mechanism?
-- Transport: Kafka, HTTP, NATS, CloudEvents?
+- Does OSAC have an existing alerting mechanism? (deferred)
+- Transport: Kafka, HTTP, NATS, CloudEvents? (deferred)
 
 **Scope:**
-- IN: Threshold notification mechanism from RHCM to OSAC
-- OUT: Alert UI in RHCM; grace period enforcement (OSAC's responsibility)
+- IN: Threshold notification mechanism from RHCM to OSAC (**parked, no timeline set**)
+- OUT (PoC): Push/webhook mechanism; alert UI in RHCM; grace period enforcement (OSAC's responsibility)
 
 ---
 
 ### REQ-13: Custom Metrics / Custom Rates
-**Priority:** HIGH
-[COST-7808](https://redhat.atlassian.net/browse/COST-7810)
-Rank: 11
+**Priority:** HIGH &nbsp;·&nbsp; [COST-7808](https://redhat.atlassian.net/browse/COST-7810) &nbsp;·&nbsp; **Rank:** 11
 
 Ability to create a custom rate from an arbitrary metric dimension emitted by OSAC CloudEvents. Allows new dimensions to be metered without hardcoded support in RHCM.
 
@@ -332,9 +321,7 @@ Ability to create a custom rate from an arbitrary metric dimension emitted by OS
 ---
 
 ### REQ-2a: Cloud Events from OpenShift AI (MaaS) & Token Metering
-**Priority:** HIGH
-[COST-7797](https://redhat.atlassian.net/browse/COST-7797)
-Rank: 12
+**Priority:** HIGH &nbsp;·&nbsp; [COST-7797](https://redhat.atlassian.net/browse/COST-7797) &nbsp;·&nbsp; **Rank:** 12
 
 Consume CloudEvents from OpenShift AI 5 for token metering. OSAC emits CloudEvents with token counts (input, output, inference) and request counts. Track token dimensions (input, output, cached, reasoning) and GPU compute metrics for MaaS workloads provisioned via OSAC. Define MaaS rate structure priced per million units. Cost must compute MaaS cost within 60 seconds of receiving data.
 
@@ -359,6 +346,7 @@ Consume CloudEvents from OpenShift AI 5 for token metering. OSAC emits CloudEven
 **Open Questions:**
 - Who collects RHOAI MaaS metrics — Cost or OSAC?
 - What fields will OSAC MaaS CloudEvents contain?
+- **Do events include `tenant_id` and `project_id` attribution?** — Martin verifying via Noi's emulator (action from Jul 2 meeting). If missing, OSAC may need to act as middleman. (~00:28:50–00:32:02)
 - Transport for MaaS events: HTTP, Kafka, other?
 - Who defines the MaaS rate structure: Cost team, OSAC, or agreed jointly?
 
@@ -371,9 +359,7 @@ Consume CloudEvents from OpenShift AI 5 for token metering. OSAC emits CloudEven
 ---
 
 ### REQ-3b: Service Catalog Sync from OSAC
-**Priority:** MEDIUM
-[COST-7800](https://redhat.atlassian.net/browse/COST-7800)
-Rank: 13
+**Priority:** MEDIUM &nbsp;·&nbsp; [COST-7800](https://redhat.atlassian.net/browse/COST-7800) &nbsp;·&nbsp; **Rank:** 13
 
 Read OSAC service catalog for pricing. Manual setup acceptable for PoC; API sync deferred to a later phase.
 
@@ -395,9 +381,7 @@ Read OSAC service catalog for pricing. Manual setup acceptable for PoC; API sync
 ---
 
 ### REQ-5: Chargeback Reporting
-**Priority:** MEDIUM
-[COST-7801](https://redhat.atlassian.net/browse/COST-7801)
-Rank: 14
+**Priority:** MEDIUM &nbsp;·&nbsp; [COST-7801](https://redhat.atlassian.net/browse/COST-7801) &nbsp;·&nbsp; **Rank:** 14
 
 Export chargeback reports covering both capacity-based (provisioned compute hours) and consumption-based (GPU hours, token consumption) dimensions per tenant/project.
 
@@ -416,9 +400,7 @@ Export chargeback reports covering both capacity-based (provisioned compute hour
 ---
 
 ### REQ-7: Audit Trail
-**Priority:** MEDIUM
-[COST-7802](https://redhat.atlassian.net/browse/COST-7802)
-Rank: 15
+**Priority:** MEDIUM &nbsp;·&nbsp; [COST-7802](https://redhat.atlassian.net/browse/COST-7802) &nbsp;·&nbsp; **Rank:** 15
 
 Zero-leakage reconciliation, immutable audit logs, and dispute resolution support.
 
@@ -434,9 +416,7 @@ Zero-leakage reconciliation, immutable audit logs, and dispute resolution suppor
 ---
 
 ### REQ-11: Cost Tiers
-**Priority:** LOW
-[COST-7808](https://redhat.atlassian.net/browse/COST-7808)
-Rank: 16
+**Priority:** LOW &nbsp;·&nbsp; [COST-7808](https://redhat.atlassian.net/browse/COST-7808) &nbsp;·&nbsp; **Rank:** 16
 
 Tiered pricing support for both capacity-based and MaaS consumption-based rates. Example: first 20 GiB free, next 100 GiB at $0.08/GiB-month, next 1000 GiB at $0.07/GiB-month.
 
@@ -462,9 +442,7 @@ Tiered pricing support for both capacity-based and MaaS consumption-based rates.
 ---
 
 ### REQ-12: Daily OpenShift Virtualization Costs
-**Priority:** LOW
-[COST-7808](https://redhat.atlassian.net/browse/COST-7808)
-Rank: 17
+**Priority:** LOW &nbsp;·&nbsp; [COST-7808](https://redhat.atlassian.net/browse/COST-7808) &nbsp;·&nbsp; **Rank:** 17
 
 Daily cost calculation for OpenShift Virtualization workloads provisioned through OSAC.
 
@@ -480,11 +458,11 @@ Daily cost calculation for OpenShift Virtualization workloads provisioned throug
 ---
 
 ### REQ-8: Bare Metal Costing (OSAC Bare Metal Service)
-**Priority:** HIGH
-[COST-7801](https://redhat.atlassian.net/browse/COST-7801)
-Rank: 18
+**Priority:** HIGH → **Parked (post-PoC)** &nbsp;·&nbsp; [COST-7801](https://redhat.atlassian.net/browse/COST-7801) &nbsp;·&nbsp; **Rank:** 18
 
 Support bare metal nodes provisioned through OSAC (BMaaS), including potential standalone nodes outside OpenShift clusters. Consume bare metal service CloudEvents for capacity-based costing.
+
+> **Decision (Jul 2, 2026):** Deferred from July 31 PoC scope. Owner: Moti. (~00:37:25)
 
 **Acceptance Criteria:**
 - RHCM receives and processes bare metal service CloudEvents from OSAC
@@ -493,17 +471,17 @@ Support bare metal nodes provisioned through OSAC (BMaaS), including potential s
 
 **Current State:**
 - OSAC bare metal service is actively being built (confirmed Jun 24)
-- RHCM already supports OpenShift bare metal costing
-- Open question: do we need to support nodes outside OpenShift clusters?
-- Standalone bare metal requirements under investigation
+- BareMetalInstance not yet in the Watch stream `oneof`; available via REST List API
+- Implementation follows same reconciler pattern as VMs — ready to pick up post-PoC
+- Jul 2 meeting: deferred from PoC scope
 
 **Open Questions:**
 - OSAC needs to define the BMaaS CloudEvents schema first
 - Do we need to support nodes outside of an OCP cluster?
 
 **Scope:**
-- IN: Bare metal capacity-based costing via OSAC CloudEvents
-- OUT: Standalone bare metal support TBD pending requirements review
+- IN: Bare metal capacity-based costing via OSAC CloudEvents (**post-PoC**)
+- OUT (PoC): Bare metal costing; standalone bare metal support TBD
 
 ---
 
@@ -562,12 +540,12 @@ MFA, granular RBAC for billing admins, and short-lived auth tokens.
 | 7 | Rate Limiting | Must Have | Expose "am I in quota or exceeded?" API (REQ-9) |
 | 8 | Budgets/Quotas | Must Have | Investigate and implement quota/budget concept in Cost Management |
 | 9 | Budgets/Quotas | Must Have | Verify if AI Grid requirements include grace periods |
-| 10 | Notifications | Must Have | Implement user-configurable threshold rules for alerts |
-| 11 | Notifications | Must Have | Agree on alert format and transport with OSAC |
+| 10 | Notifications | ~~Must Have~~ **Parked** | ~~Implement user-configurable threshold rules for alerts~~ Parked for now; pull model (REQ-9) sufficient for Jul 31 |
+| 11 | Notifications | ~~Must Have~~ **Parked** | ~~Agree on alert format and transport with OSAC~~ Parked for now |
 | 12 | Cost Tiers | Must Have | Implement cost tiers for capacity-based and MaaS rates (REQ-11) |
 | 13 | Custom Metrics | Must Have | Investigate consuming arbitrary CloudEvent dimensions as rate inputs (REQ-13) |
-| 14 | Bare Metal | Should Have | Confirm existing OCP bare metal coverage |
-| 15 | Bare Metal | Should Have | Investigate node-outside-OCP gap |
+| 14 | Bare Metal | ~~Should Have~~ **Parked** | ~~Confirm existing OCP bare metal coverage~~ Deferred from Jul 31 PoC scope |
+| 15 | Bare Metal | ~~Should Have~~ **Parked** | ~~Investigate node-outside-OCP gap~~ Deferred from Jul 31 PoC scope |
 | 16 | Tenancy | Should Have | Implement OSAC project entities in Cost Management |
 | 17 | Tenancy | Should Have | Determine RBAC needs for cross-project visibility |
 
@@ -583,12 +561,15 @@ MFA, granular RBAC for billing admins, and short-lived auth tokens.
 | **Quota/Budget source of truth** | OSAC owns and defines limits (source of truth). Cost caches limits via the OSAC List API (read-only). Cost owns metering, consumption aggregation, and threshold evaluation. | [alerting-osac-integration.md](../poc_architecture/boundary_monitoring/alerting-osac-integration.md) |
 | **Tenant/Project hierarchy** | OSAC `Tenant → Project` model is tracked in Cost (`inventory_project`). All metering entries carry `tenant_id`; costs drill down to project level. No pre-provisioning required — first event auto-registers the tenant. | REQ-3a; [architecture.md](../poc_architecture/architecture.md) |
 | **Metering sweep interval** | 60-second sweep satisfies the processing SLA and matches the planned OSAC metering collector cadence. On DELETE, a final metering entry closes the gap to the deletion timestamp. | [ADR-001](../decisions/001-metering-sweep-interval.md) |
+| **RBAC scope for PoC** | Tenant + project level is sufficient. Fine-grained InsightsRBAC deferred post-PoC. Project + tenant attribution already tracked on the event-driven side. | Jul 2, 2026 meeting — Pau, Moti, Cody |
+| **Quota alert transport (REQ-10)** | Pull-only (REQ-9 quota status API) is sufficient for the July 31 PoC. REQ-10 push/webhook mechanism parked for now. OSAC already exposes a check-balance API for MaaS quota enforcement. | Jul 2, 2026 meeting — Moti, Ronnie |
+| **Naming and architecture conventions** | All design decisions keep eventual Koku/on-prem integration in mind. Where choices exist, prefer Koku conventions (field names, rate structure, report format). Broader convergence direction to be decided in a separate meeting (EMR). | Jul 2, 2026 meeting — Martin, Pau |
 
 ### Leaning / Pending Confirmation
 
 | Decision | Direction | Open Items |
 |----------|-----------|------------|
-| **Quota alert transport (REQ-10)** | Push + pull together (Option 1): Cost pushes async threshold events to an OSAC webhook; OSAC pulls quota status synchronously at create-gate time. Pull-only (Option 2) is an acceptable PoC interim. | Alert webhook path and auth on OSAC side not yet agreed; OSAC architect to confirm with working group. |
+| **MaaS event attribution** | OSAC forwards MaaS events to Cost with `tenant_id` + `project_id` fields included. | Martin verifying via Noi's MaaS emulator (action from Jul 2 meeting). If fields missing, OSAC may need to act as middleman. |
 
 ### Unresolved
 
@@ -597,5 +578,14 @@ MFA, granular RBAC for billing admins, and short-lived auth tokens.
 | **Cost tier ownership** | Cost only / OSAC only / Both synced | Shapes rate engine design and sync complexity (REQ-11) |
 | **Provider UI surface** | Cost Management UI / OSAC fetches from Cost API | Determines whether Cost needs project-scoped RBAC and project entity management |
 | **MaaS metric collection** | Cost collects directly from RHOAI / OSAC collects and forwards to Cost | Defines integration boundary and data pipeline ownership (REQ-2a, REQ-4); currently blocked on OSAC MaaS CloudEvent schema |
+| **Three-way convergence** | SaaS cost management, on-prem Koku, OSAC PoC cannot be maintained separately long-term. | EMR meeting expected next week to set direction. Outcome affects RBAC approach (InsightsRBAC vs Keycloak) and long-term architecture. |
 
 ---
+
+**Changelog — v1.3 (Jul 2, 2026 meeting):**
+- REQ-8 (bare metal): deferred from July 31 PoC scope
+- REQ-10 (threshold notifications): parked for now; pull model (REQ-9) sufficient
+- REQ-3a RBAC scope: tenant + project level confirmed for PoC; InsightsRBAC deferred
+- REQ-2a: Martin to verify MaaS cloud event tenant/project attribution fields
+- Design principle confirmed: prefer Koku conventions for all naming and architecture choices
+- Architectural decisions table updated accordingly
