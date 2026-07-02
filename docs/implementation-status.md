@@ -20,19 +20,19 @@
 |---|---|---|---|---|---|
 | POC-ENV | CRITICAL | On-prem deployment | Not started | RHCM team scope | N/A — deployment, not consumer |
 | POC-ARCH | CRITICAL | Capacity-based charging | **Done** | — | Standalone Go component, heartbeat-driven |
-| REQ-1 | CRITICAL | OSAC integration | **Done** | — | [req1 gap analysis](req1-osac-integration-gap-analysis.md) |
+| REQ-1 | CRITICAL | OSAC integration | **Done** | — | [req1 gap analysis](requirements/req1-osac-integration-gap-analysis.md) |
 | REQ-1a | HIGH | Cluster lifecycle | **Done** | Verify "cluster orders" = Cluster | Tracking clusters with node sets |
 | REQ-1b | CRITICAL | Heartbeat ingestion | **Done** | — | Local 60s sweep = heartbeat equivalent ([ADR-003](decisions/003-heartbeat-emitter-vs-sweep.md)) |
 | REQ-2 | CRITICAL | Real-time cost calc | **Done** | — | <1ms/event, cost within 30s |
-| REQ-2a | HIGH | MaaS CloudEvents | **Done** (mock) | OSAC Model entity | [req2 gap analysis](req2-maas-costing-gap-analysis.md) |
+| REQ-2a | HIGH | MaaS CloudEvents | **Done** (mock) | OSAC Model entity | [req2 gap analysis](requirements/req2-maas-costing-gap-analysis.md) |
 | REQ-3 | HIGH | Granular cost tracking | **Done** | — | Report API: `GET /api/v1/reports/costs` (JSON + CSV) |
 | REQ-3a | HIGH | Tenant/project attribution | **Done** | Authz/RBAC open | [Open questions](#req-3a--tenantproject-attribution); [roadmap RBAC note](roadmap.md#osac-projects--rbac-from-pau) |
 | REQ-3b | MEDIUM | Service catalog sync | **Done** | — | Instance types + catalog items synced via reconciler |
-| REQ-4 | HIGH | Token metering | **Done** (mock) | OSAC MaaS schema | [req2 gap analysis](req2-maas-costing-gap-analysis.md) |
+| REQ-4 | HIGH | Token metering | **Done** (mock) | OSAC MaaS schema | [req2 gap analysis](requirements/req2-maas-costing-gap-analysis.md) |
 | REQ-5 | MEDIUM | Chargeback reporting | Partial | — | Report API done (JSON + CSV); no scheduled export yet |
-| REQ-8 | HIGH | Bare metal costing | **Done** | Watch `oneof` gap — uses reconciler | [req8 gap analysis](req8-bare-metal-gap-analysis.md) |
+| REQ-8 | HIGH | Bare metal costing | **Done** | Watch `oneof` gap — uses reconciler | [req8 gap analysis](requirements/req8-bare-metal-gap-analysis.md) |
 | REQ-9 | HIGH | Quota/budget status API | **Done** | — | `GET /api/v1/quotas/{tenant_id}` |
-| REQ-10 | HIGH | Threshold notifications | **Done** (pull) | Webhook push deferred | [req10 analysis](req10-threshold-notifications-analysis.md) |
+| REQ-10 | HIGH | Threshold notifications | **Done** (pull) | Webhook push deferred | [req10 analysis](requirements/req10-threshold-notifications-analysis.md) |
 | REQ-11 | MUST HAVE | Cost tiers | **Done** | — | Tiered pricing in rate engine |
 | REQ-12 | TBD | Daily OCP Virt costs | TBD | PM definition | Not scoped |
 | REQ-13 | HIGH | Custom rate dimensions | Not started | — | [Research done](research/rating-engine-options.md) |
