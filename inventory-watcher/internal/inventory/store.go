@@ -133,6 +133,18 @@ CREATE TABLE IF NOT EXISTS inventory_bare_metal_instance (
 CREATE INDEX IF NOT EXISTS idx_bm_alive ON inventory_bare_metal_instance (deleted_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_bm_tenant ON inventory_bare_metal_instance (tenant);
 
+CREATE TABLE IF NOT EXISTS inventory_catalog_item (
+    catalog_item_id TEXT PRIMARY KEY,
+    item_type       TEXT NOT NULL DEFAULT '',
+    name            TEXT NOT NULL DEFAULT '',
+    title           TEXT NOT NULL DEFAULT '',
+    description     TEXT NOT NULL DEFAULT '',
+    template        TEXT NOT NULL DEFAULT '',
+    published       BOOLEAN NOT NULL DEFAULT false,
+    tenant          TEXT NOT NULL DEFAULT '',
+    last_updated    TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS inventory_instance_type (
     instance_type_id TEXT PRIMARY KEY,
     name             TEXT NOT NULL DEFAULT '',
@@ -735,6 +747,30 @@ func (s *Store) ListAllInstanceTypes(ctx context.Context) ([]InstanceTypeRecord,
 		results = append(results, r)
 	}
 	return results, rows.Err()
+}
+
+// UpsertCatalogItem inserts or updates a catalog item (SKU definition).
+func (s *Store) UpsertCatalogItem(ctx context.Context, rec CatalogItemRecord) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO inventory_catalog_item
+			(catalog_item_id, item_type, name, title, description, template, published, tenant, last_updated)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+		ON CONFLICT (catalog_item_id) DO UPDATE SET
+			name = EXCLUDED.name,
+			title = EXCLUDED.title,
+			description = EXCLUDED.description,
+			template = EXCLUDED.template,
+			published = EXCLUDED.published,
+			tenant = EXCLUDED.tenant,
+			last_updated = NOW()
+	`, rec.CatalogItemID, rec.ItemType, rec.Name, rec.Title, rec.Description,
+		rec.Template, rec.Published, rec.Tenant)
+
+	if err != nil {
+		return fmt.Errorf("upsert catalog item %s: %w", rec.CatalogItemID, err)
+	}
+	s.logger.Debug("upserted catalog item", "id", rec.CatalogItemID, "type", rec.ItemType, "title", rec.Title)
+	return nil
 }
 
 // ListAliveComputeInstances returns all compute instances not yet deleted.
