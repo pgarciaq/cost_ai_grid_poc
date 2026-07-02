@@ -1,95 +1,181 @@
-# Meeting Prep — 2026-07-02
+# Meeting Prep — July 2, 2026
 
-## OpenShift/CRC Deployment Implementation
+## Work Summary (June 25 – July 1)
 
-### Summary
+### Week 1 (June 25–27): Foundation
 
-Implemented minimal OpenShift deployment for cost-event-consumer, successfully tested on local CRC (CodeReady Containers). The service is now containerized and running in OpenShift with PostgreSQL backend.
+Built the **inventory-watcher** — a Go service consuming OSAC events and
+producing cost data. End-to-end pipeline working:
 
-### What Was Completed
+- **OSAC integration** (REQ-1) — Watch stream for real-time events,
+  reconciler for drift correction, projects/tenants/instance types synced
+- **Metering** — 60-second sweep producing `vm_uptime_seconds`,
+  `vm_cpu_core_seconds`, `vm_memory_gib_seconds`, `cluster_uptime_seconds`,
+  `cluster_worker_node_seconds` for all billable resources
+- **MaaS metering** (REQ-2a/REQ-4) — consumption-based token metering via
+  ingest endpoint + simulator (1,700 events/s sustained)
+- **Rate engine** (REQ-11) — flat + tiered pricing, default rates seeded,
+  cost entries with dollar amounts
+- **Quota status API** (REQ-9) — `GET /api/v1/quotas/{tenant_id}` with
+  threshold checks at 50/70/90/100%
+- **Threshold alerts** (REQ-10, pull model) — fired alerts included in
+  quota API response
+- **OpenMeter-compatible ingest** — `POST /api/v1/events` accepts the exact
+  CloudEvents format the OSAC metering collector produces. Switching the
+  collector from OpenMeter to us is a URL change.
+- **Koku schema alignment** — rates table extended with `cost_type`
+  (Infrastructure/Supplementary) and `koku_metric` for future rate sync
 
-1. **Health Check Endpoints** (Step 2 from deployment plan)
-   - Added `/healthz` (liveness probe) - returns 200 OK if service is running
-   - Added `/readyz` (readiness probe) - returns 200 OK when ready for traffic
-   - Modified: `inventory-watcher/internal/ingest/handler.go`
+### Weekend (June 28–29): Hardening + Bare Metal
 
-2. **Container Image** (Step 1 from deployment plan)
-   - Created `inventory-watcher/Containerfile`
-   - Multi-stage build: UBI10 go-toolset → ubi10-minimal runtime
-   - Workaround: `GOTOOLCHAIN=auto` to download Go 1.26.4 (UBI10 ships with 1.24.6)
-   - Built binaries: `cost-event-consumer` and `maas-simulator`
-   - Image size: 164MB (45MB compressed)
-   - Published to: `quay.io/martin_povolny/cost-event-consumer:latest`
+- **Adversarial code review** — 17 findings across 8 dimensions, 9 fixed:
+  JWT auth, error handling, input validation, HTTP limits, pagination,
+  scanner buffer, N+1 query, JSON injection, division by zero
+- **JWT authentication** (#1) — OSAC-compatible, same `golang-jwt` library,
+  same token works for both OSAC and our endpoints
+- **OSAC List pagination** (#3) — offset/limit loop, prevents phantom
+  deletes at scale
+- **Bare metal costing** (REQ-8) — full implementation via reconciler
+  polling + metering sweep
 
-3. **Kubernetes Manifests** (Step 3 from deployment plan)
-   - Created `deploy/k8s/` directory with:
-     - `namespace.yaml` - creates `cost-mgmt` namespace
-     - `postgres.yaml` - StatefulSet with 1Gi PVC, pg_isready probes
-     - `consumer.yaml` - Deployment with health probes, resource limits, Service
-   - Secrets for DB credentials and OSAC token (created via oc CLI)
+### Monday–Tuesday (June 30 – July 1): Reports + IPP
 
-4. **CRC Deployment** (Step 4 from deployment plan)
-   - Created `oc.sh` wrapper script for CRC environment setup
-   - Deployed PostgreSQL StatefulSet - **running successfully**
-   - Deployed cost-event-consumer Deployment - **running successfully**
-   - Verified health endpoints via port-forward: both return 200 OK
-   - Created `deploy/k8s/README.md` with deployment guide
+- **Report API** (REQ-3/REQ-5) — `GET /api/v1/reports/costs` and
+  `/reports/summary`
+- **IPP-compatible MaaS format** — 5 token dimensions matching the
+  Inference Performance Protocol
+- **Balance check endpoint** — IPP-compatible quota check
+- **Dashboard demo** — interactive HTML dashboard for cost visualization
+- **OpenShift/CRC deployment** — containerized and deployed on CRC:
+  - Multi-stage UBI10 container image (164MB), published to quay.io
+  - Kubernetes manifests (namespace, PostgreSQL StatefulSet, consumer Deployment)
+  - Health probes (`/healthz`, `/readyz`) working
+  - PostgreSQL connected, tables auto-created, HTTP API listening
+  - OSAC integration pending (fulfillment-service not yet deployed in CRC)
+- **Observability plan** — structured logging, metrics, health checks
 
-5. **Documentation**
-   - `deploy/k8s/README.md` - Quick start guide, status, test commands
-   - Committed all changes to `openshift-deployment` branch
+### Demo (July 1)
 
-### Current State in CRC
+Live demo to Cody showing the full pipeline:
+- OSAC Watch stream → inventory sync in real-time
+- VM creation → appears in cost DB within 1-2 seconds
+- 60-second metering sweep → usage records
+- 30-second rating sweep → dollar costs
+- Quota API with threshold alerts
+- MaaS simulator firing 500 events at 200/s
+- OpenMeter-compatible CloudEvent ingestion
+- Service running on CRC/OpenShift with health probes passing
 
-```
-NAME                                   READY   STATUS    RESTARTS   AGE
-cost-db-0                              1/1     Running   0          63m
-cost-event-consumer-7b9bf46fb5-646xv   1/1     Running   0          20s
-```
+---
 
-**Service is functional:**
-- ✅ Health probes working (`/healthz`, `/readyz`)
-- ✅ PostgreSQL connected (tables auto-created on startup)
-- ✅ HTTP API listening on port 8020
-- ✅ Dashboard accessible via port-forward
-- ⏸️  OSAC integration errors (expected - fulfillment-service not deployed)
+## Current Implementation Status
 
-### Registry Note
+**10 done / 4 partial / 2 not started** out of 16 requirements.
 
-Used `quay.io/martin_povolny/cost-event-consumer` instead of planned `quay.io/cost-mgmt/cost-event-consumer` (the `cost-mgmt` org doesn't exist yet or we don't have access).
+| Req | Status | What |
+|---|---|---|
+| POC-ARCH | **Done** | Capacity-based charging, standalone Go component |
+| REQ-1 | **Done** | OSAC integration (Watch + reconciler + inventory) |
+| REQ-1a | **Done** | Cluster lifecycle tracking |
+| REQ-1b | **Done** | Heartbeat ingestion (local sweep = equivalent) |
+| REQ-2 | **Done** | Real-time cost calc (<1ms/event) |
+| REQ-2a | **Done** (mock) | MaaS CloudEvents (IPP format) |
+| REQ-4 | **Done** (mock) | Token metering (5 dimensions) |
+| REQ-8 | **Done** | Bare metal costing |
+| REQ-9 | **Done** | Quota/budget status API |
+| REQ-10 | **Done** (pull) | Threshold alerts in quota response |
+| REQ-11 | **Done** | Cost tiers (tiered pricing) |
+| REQ-3 | Partial | Report API implemented, export TBD |
+| REQ-3a | **Done** | Tenant/project attribution |
+| REQ-3b | Partial | Instance types synced, rates manual |
+| REQ-5 | Partial | Report API, formatted export TBD |
+| REQ-13 | Not started | Custom rate dimensions (GoRules research done) |
+| POC-ENV | Not started | On-prem deployment (RHCM team scope) |
 
-### What's NOT Done Yet (from deployment plan)
+---
 
-- Step 5: Deploy OSAC fulfillment-service in CRC (requires cert-manager, Keycloak, PostgreSQL for OSAC)
-- Step 7: Prometheus metrics endpoint (exists in code but no ServiceMonitor manifest)
-- Step 8: Helm chart extraction (still using plain manifests)
+## Key Architectural Decisions
 
-### Next Steps
+1. **No Kafka** — gRPC Watch stream + reconciler (Kubernetes pattern).
+   See [ADR-002](decisions/002-arguments-against-kafka.md).
 
-1. **For full integration testing:** Deploy OSAC fulfillment-service in CRC
-   - Requires: cert-manager, trust-manager, Keycloak operator, PostgreSQL
-   - Use OSAC's production Helm chart with CRC values override
-   
-2. **For production readiness:**
-   - Extract Helm chart from working manifests
-   - Add ServiceMonitor for Prometheus scraping
-   - Set up proper `cost-mgmt` org on quay.io
+2. **Local metering sweep** — replicates what OSAC heartbeat collector
+   would provide. Both produce identical `metering_entries`. The ingest
+   endpoint is ready for real collector events.
+   See [ADR-003](decisions/003-heartbeat-emitter-vs-sweep.md).
 
-3. **For CI/CD:**
-   - Add GitHub Actions / Tekton pipeline to build & push on merge
-   - Tag images with git SHA (not just `latest`)
+3. **OpenMeter compatibility** — our ingest endpoint accepts the same
+   CloudEvents format. Switching the OSAC collector to us = URL change.
 
-### Files Changed
+4. **Koku naming alignment** — `cost_type`, `koku_metric` on rates.
+   Preparing for eventual merge with Koku.
 
-```
-A  deploy/k8s/README.md              # Deployment guide
-A  deploy/k8s/consumer.yaml          # Consumer Deployment + Service
-A  deploy/k8s/deploy-crc.sh          # Automated deploy script (untested)
-A  deploy/k8s/namespace.yaml         # Namespace manifest
-A  deploy/k8s/postgres.yaml          # PostgreSQL StatefulSet + Service
-A  inventory-watcher/Containerfile   # Multi-stage build
-M  inventory-watcher/internal/ingest/handler.go  # Health endpoints
-A  oc.sh                             # CRC oc wrapper
-```
+---
 
-Commit: `109c170` on `openshift-deployment` branch
+## Open Questions for OSAC
+
+See [meeting-questions-osac.md](meeting-questions-osac.md) for the full
+list (18 questions across bare metal, catalog, private API, MaaS,
+notifications, transport, tenancy).
+
+**Top priority for this meeting:**
+
+1. **Get access to Noy's dogfood environment** — Noy offered (Jul 1) but
+   nobody followed up. We need access to test our ingest endpoint against
+   real RHOAI → IPP metering events. Our `POST /api/v1/events` and
+   `POST /api/v1/check` already implement the `reportUsage` and
+   `checkBalance` APIs — we can replace Noy's metering-simulator as the
+   backend. **Action: ask Noy to provide credentials/access today.**
+
+2. **Can we use the private Watch stream?** — unlocks real-time bare metal
+   events and catalog item sync
+
+3. **MaaS metrics ownership** — does OSAC collect from RHOAI or do we?
+   (Partly answered by Noy's IPP architecture — the IPP plugin calls us
+   directly, so RHOAI/gateway is the collector)
+
+4. **Alert transport** — webhook endpoint on OSAC side for push
+   notifications?
+
+---
+
+## Next Steps
+
+### In Progress
+
+1. **OpenShift/CRC setup** — consumer is deployed and running on CRC.
+   Next: deploy OSAC fulfillment-service alongside for full integration
+   testing. Requires cert-manager, Keycloak, PostgreSQL for OSAC.
+
+2. **Observability** — structured logging in place, health probes working.
+   Next: Prometheus metrics endpoint, ServiceMonitor manifest, structured
+   metric exposition for metering/rating sweep latencies and event
+   throughput.
+
+### Upcoming
+
+3. **Replace Noy Itzikowitz's simulators with our stack** — Noy has two
+   simulators: `llm-katan` (echoes inference requests with token data) and
+   `metering-simulator` (implements `checkBalance` + `reportUsage` APIs).
+   Our ingest endpoint already implements `POST /api/v1/events`
+   (`reportUsage`) and the balance check endpoint (`checkBalance`). We can
+   replace Noy's metering-simulator — the IPP plugin just needs to point
+   at our endpoint. Moti flagged this as a PoC action item for us.
+
+4. **Test against Noy's dogfood environment** — Noy offered access to a
+   live environment with real Claude Code and Codex sessions flowing
+   through the RHOAI gateway + IPP metering pipeline. We should get access
+   and test our ingest endpoint receiving real MaaS events from the IPP
+   external-metering plugin. This would validate the full flow:
+   RHOAI → IPP plugin → `POST /api/v1/events` → our metering → cost.
+
+5. **Connect to real OSAC collector** — redirect metering collector from
+   OpenMeter to our ingest endpoint
+
+6. **Koku rate sync** — read rates from Koku's `cost_model` table
+
+7. **Report API export** — CSV/JSON export for REQ-5
+
+8. **Helm chart** — extract from working K8s manifests
+
+9. **Custom rate dimensions** (REQ-13) — if time permits before July 31
