@@ -120,23 +120,62 @@ notifications, transport, tenancy).
 
 **Top priority for this meeting:**
 
-1. **Can we use the private Watch stream?** — unlocks real-time bare metal
+1. **Get access to Noy's dogfood environment** — Noy offered (Jul 1) but
+   nobody followed up. We need access to test our ingest endpoint against
+   real RHOAI → IPP metering events. Our `POST /api/v1/events` and
+   `POST /api/v1/check` already implement the `reportUsage` and
+   `checkBalance` APIs — we can replace Noy's metering-simulator as the
+   backend. **Action: ask Noy to provide credentials/access today.**
+
+2. **Can we use the private Watch stream?** — unlocks real-time bare metal
    events and catalog item sync
 
-2. **MaaS metrics ownership** — does OSAC collect from RHOAI or do we?
+3. **MaaS metrics ownership** — does OSAC collect from RHOAI or do we?
+   (Partly answered by Noy's IPP architecture — the IPP plugin calls us
+   directly, so RHOAI/gateway is the collector)
 
-3. **Alert transport** — webhook endpoint on OSAC side for push
+4. **Alert transport** — webhook endpoint on OSAC side for push
    notifications?
 
 ---
 
 ## Next Steps
 
-1. **Deploy OSAC in CRC** — deploy fulfillment-service alongside our
-   consumer for full integration testing on OpenShift
-2. **Connect to real OSAC collector** — redirect from OpenMeter to our
-   ingest endpoint
-3. **Koku rate sync** — read rates from Koku's `cost_model` table
-4. **Report API export** — CSV/JSON export for REQ-5
-5. **Helm chart** — extract from working K8s manifests
-6. **Custom rate dimensions** (REQ-13) — if time permits before July 31
+### In Progress
+
+1. **OpenShift/CRC setup** — consumer is deployed and running on CRC.
+   Next: deploy OSAC fulfillment-service alongside for full integration
+   testing. Requires cert-manager, Keycloak, PostgreSQL for OSAC.
+
+2. **Observability** — structured logging in place, health probes working.
+   Next: Prometheus metrics endpoint, ServiceMonitor manifest, structured
+   metric exposition for metering/rating sweep latencies and event
+   throughput.
+
+### Upcoming
+
+3. **Replace Noy Itzikowitz's simulators with our stack** — Noy has two
+   simulators: `llm-katan` (echoes inference requests with token data) and
+   `metering-simulator` (implements `checkBalance` + `reportUsage` APIs).
+   Our ingest endpoint already implements `POST /api/v1/events`
+   (`reportUsage`) and the balance check endpoint (`checkBalance`). We can
+   replace Noy's metering-simulator — the IPP plugin just needs to point
+   at our endpoint. Moti flagged this as a PoC action item for us.
+
+4. **Test against Noy's dogfood environment** — Noy offered access to a
+   live environment with real Claude Code and Codex sessions flowing
+   through the RHOAI gateway + IPP metering pipeline. We should get access
+   and test our ingest endpoint receiving real MaaS events from the IPP
+   external-metering plugin. This would validate the full flow:
+   RHOAI → IPP plugin → `POST /api/v1/events` → our metering → cost.
+
+5. **Connect to real OSAC collector** — redirect metering collector from
+   OpenMeter to our ingest endpoint
+
+6. **Koku rate sync** — read rates from Koku's `cost_model` table
+
+7. **Report API export** — CSV/JSON export for REQ-5
+
+8. **Helm chart** — extract from working K8s manifests
+
+9. **Custom rate dimensions** (REQ-13) — if time permits before July 31
