@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,7 +73,7 @@ func LoadFromFile(path string, logger *slog.Logger) (*Registry, error) {
 	}
 	for _, def := range cfg.CustomMetrics {
 		if hardcodedEventTypes[def.EventType] {
-			logger.Warn("custom metric event_type shadows a hardcoded handler",
+			logger.Warn("custom metric event_type shadows a hardcoded handler — built-in handler takes precedence, this definition will be ignored",
 				"event_type", def.EventType)
 		}
 		r.defs[def.EventType] = def
@@ -184,7 +186,7 @@ func (r *Registry) ProcessEvent(ctx context.Context, store MeteringStore, eventT
 				"meter", m.MeterName, "field", m.ValueField, "value", raw)
 			continue
 		}
-		if value == 0 {
+		if value <= 0 {
 			continue
 		}
 
@@ -231,11 +233,12 @@ func extractField(data map[string]interface{}, path string) (interface{}, bool) 
 }
 
 func toFloat64(v interface{}) (float64, bool) {
+	var f float64
 	switch n := v.(type) {
 	case float64:
-		return n, true
+		f = n
 	case float32:
-		return float64(n), true
+		f = float64(n)
 	case int:
 		return float64(n), true
 	case int64:
@@ -243,15 +246,24 @@ func toFloat64(v interface{}) (float64, bool) {
 	case int32:
 		return float64(n), true
 	case json.Number:
-		f, err := n.Float64()
-		return f, err == nil
+		var err error
+		f, err = n.Float64()
+		if err != nil {
+			return 0, false
+		}
 	case string:
-		var f float64
-		_, err := fmt.Sscanf(n, "%f", &f)
-		return f, err == nil
+		var err error
+		f, err = strconv.ParseFloat(n, 64)
+		if err != nil {
+			return 0, false
+		}
 	default:
 		return 0, false
 	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return f, true
 }
 
 func toString(v interface{}) string {

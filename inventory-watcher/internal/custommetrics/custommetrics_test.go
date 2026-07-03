@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -204,6 +205,11 @@ func TestToFloat64(t *testing.T) {
 		{"json.Number", json.Number("99.5"), 99.5, true},
 		{"string numeric", "123.4", 123.4, true},
 		{"string non-numeric", "abc", 0, false},
+		{"string trailing garbage", "123abc", 0, false},
+		{"string NaN", "NaN", 0, false},
+		{"string Inf", "Inf", 0, false},
+		{"float64 NaN", math.NaN(), 0, false},
+		{"float64 Inf", math.Inf(1), 0, false},
 		{"bool", true, 0, false},
 		{"nil", nil, 0, false},
 	}
@@ -352,6 +358,34 @@ func TestProcessEvent_ZeroValue(t *testing.T) {
 
 	if len(store.entries) != 1 {
 		t.Fatalf("expected 1 entry (zero skipped), got %d", len(store.entries))
+	}
+}
+
+func TestProcessEvent_NegativeValue(t *testing.T) {
+	path := writeConfig(t, validConfig)
+	r, err := LoadFromFile(path, testLogger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store := &mockStore{}
+	rawData := json.RawMessage(`{
+		"instance_id": "gpu-i-abc123",
+		"tenant_id": "tenant-acme",
+		"gpu_memory_gib_seconds": -100.0,
+		"gpu_compute_seconds": 3600.0
+	}`)
+
+	err = r.ProcessEvent(context.Background(), store, "osac.gpu.lifecycle", rawData, time.Now(), testLogger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(store.entries) != 1 {
+		t.Fatalf("expected 1 entry (negative skipped), got %d", len(store.entries))
+	}
+	if store.entries[0].MeterName != "gpu_compute_seconds" {
+		t.Errorf("expected gpu_compute_seconds, got %s", store.entries[0].MeterName)
 	}
 }
 
