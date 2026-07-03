@@ -137,7 +137,7 @@ func main() {
 
 		srv := &http.Server{
 			Addr:           cfg.IngestListenAddr,
-			Handler:        panicRecovery(logger, metrics.HTTPMiddleware(auth.Wrap(h.ServeMux()))),
+			Handler:        metrics.RequestLogger(logger, panicRecovery(logger, metrics.HTTPMiddleware(auth.Wrap(h.ServeMux())))),
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
