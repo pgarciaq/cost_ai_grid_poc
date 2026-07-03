@@ -1,0 +1,32 @@
+meta {
+  name: VM Create
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/events
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "specversion": "1.0",
+    "type": "osac.compute_instance.lifecycle",
+    "source": "bruno-demo",
+    "id": "demo-vm-create-{{$timestamp}}",
+    "time": "{{$isoTimestamp}}",
+    "subject": "tenant-acme",
+    "datacontenttype": "application/json",
+    "data": {
+      "tenant_id": "tenant-acme",
+      "resource_id": "vm-demo-001",
+      "state": "COMPUTE_INSTANCE_STATE_RUNNING",
+      "cores": 4,
+      "memory_gib": 16,
+      "instance_type": "m5.xlarge",
+      "duration_seconds": 60
+    }
+  }
+}

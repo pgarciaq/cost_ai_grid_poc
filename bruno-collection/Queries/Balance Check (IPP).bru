@@ -1,0 +1,11 @@
+meta {
+  name: Balance Check (IPP)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/customers/tenant-acme/entitlements/maas_tokens_in/value
+  body: none
+  auth: none
+}

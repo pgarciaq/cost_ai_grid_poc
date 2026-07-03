@@ -1,0 +1,36 @@
+meta {
+  name: MaaS Token Usage
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/events
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "specversion": "1.0",
+    "type": "osac.model.lifecycle",
+    "source": "bruno-demo",
+    "id": "demo-maas-{{$timestamp}}",
+    "time": "{{$isoTimestamp}}",
+    "subject": "tenant-acme",
+    "datacontenttype": "application/json",
+    "data": {
+      "tenant_id": "tenant-acme",
+      "model_id": "model-llama-3-70b",
+      "model_name": "llama-3-70b",
+      "template": "osac.templates.maas_large",
+      "state": "MODEL_STATE_RUNNING",
+      "tokens_in": 25000,
+      "tokens_out": 12000,
+      "cached_input_tokens": 5000,
+      "reasoning_tokens": 3000,
+      "requests": 85,
+      "duration_seconds": 60
+    }
+  }
+}

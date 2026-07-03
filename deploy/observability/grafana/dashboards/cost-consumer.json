@@ -1,0 +1,195 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Events Processed (rate/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(cost_consumer_events_processed_total[1m])",
+          "legendFormat": "{{type}} / {{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "reqps" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(cost_consumer_http_requests_total[1m])",
+          "legendFormat": "{{method}} {{path}} {{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Live Resources",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "targets": [
+        { "expr": "cost_consumer_live_compute_instances", "legendFormat": "VMs", "refId": "A" },
+        { "expr": "cost_consumer_live_clusters", "legendFormat": "Clusters", "refId": "B" },
+        { "expr": "cost_consumer_live_models", "legendFormat": "Models", "refId": "C" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "title": "Metering Entries Created (rate/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(cost_consumer_metering_entries_created_total[1m])",
+          "legendFormat": "{{resource_type}} / {{meter_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Cost Entries Created (rate/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(cost_consumer_cost_entries_created_total[1m])",
+          "legendFormat": "{{resource_type}} / {{cost_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Sweep Duration (p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(cost_consumer_metering_sweep_duration_seconds_bucket[5m]))",
+          "legendFormat": "Metering p99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(cost_consumer_rating_sweep_duration_seconds_bucket[5m]))",
+          "legendFormat": "Rating p99",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(cost_consumer_reconcile_duration_seconds_bucket[5m]))",
+          "legendFormat": "Reconcile p99 ({{resource_type}})",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Request Latency (p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(cost_consumer_http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{method}} {{path}} p99",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Reconcile Drift",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(cost_consumer_reconcile_drift_created_total[5m])",
+          "legendFormat": "created ({{resource_type}})",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cost_consumer_reconcile_drift_deleted_total[5m])",
+          "legendFormat": "deleted ({{resource_type}})",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Alerts Fired",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 28 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(cost_consumer_alerts_fired_total) by (threshold)",
+          "legendFormat": "{{threshold}}%",
+          "refId": "A"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "title": "Go Runtime",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "targets": [
+        { "expr": "go_goroutines", "legendFormat": "Goroutines", "refId": "A" },
+        { "expr": "process_resident_memory_bytes / 1024 / 1024", "legendFormat": "RSS (MiB)", "refId": "B" }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["cost-management"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Cost Event Consumer",
+  "uid": "cost-consumer-overview",
+  "version": 1
+}

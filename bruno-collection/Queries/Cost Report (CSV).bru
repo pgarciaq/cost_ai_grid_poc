@@ -1,0 +1,11 @@
+meta {
+  name: Cost Report (CSV)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/reports/costs?group_by=resource_type&format=csv
+  body: none
+  auth: none
+}

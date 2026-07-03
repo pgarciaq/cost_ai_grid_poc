@@ -1,0 +1,11 @@
+meta {
+  name: Cost Report (JSON)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/reports/costs?group_by=tenant&tenant_id=tenant-acme
+  body: none
+  auth: none
+}
