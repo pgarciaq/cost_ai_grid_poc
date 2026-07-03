@@ -2,10 +2,9 @@ package rating
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
-
-	"fmt"
 
 	"github.com/osac-project/cost-event-consumer/internal/inventory"
 	"github.com/osac-project/cost-event-consumer/internal/metrics"
@@ -135,7 +134,7 @@ func (r *Rater) evaluateThresholds(ctx context.Context) {
 						r.logger.Info("threshold alert fired",
 							"tenant", tenantID, "meter", q.MeterName,
 							"threshold", threshold, "consumed", consumed, "limit", q.LimitValue)
-						metrics.AlertsFiredTotal.WithLabelValues(tenantID, fmt.Sprintf("%.0f", threshold)).Inc()
+						metrics.AlertsFiredTotal.WithLabelValues(fmt.Sprintf("%.0f", threshold)).Inc()
 						fired++
 					}
 				}

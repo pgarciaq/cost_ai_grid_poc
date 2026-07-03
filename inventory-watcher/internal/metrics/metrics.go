@@ -80,7 +80,7 @@ var (
 		Namespace: namespace,
 		Name:      "alerts_fired_total",
 		Help:      "Quota threshold alerts fired.",
-	}, []string{"tenant_id", "threshold"})
+	}, []string{"threshold"})
 )
 
 // Resource gauges (updated each sweep).

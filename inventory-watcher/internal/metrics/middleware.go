@@ -3,6 +3,7 @@ package metrics
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,13 +31,26 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+var knownPaths = map[string]bool{
+	"/api/v1/events":         true,
+	"/api/v1/reports/costs":  true,
+	"/api/v1/reports/summary": true,
+	"/api/v1/debug/config":   true,
+	"/healthz":               true,
+	"/readyz":                true,
+	"/debug/dashboard":       true,
+	"/":                      true,
+}
+
 func normalizePath(path string) string {
-	switch {
-	case len(path) > len("/api/v1/quotas/") && path[:len("/api/v1/quotas/")] == "/api/v1/quotas/":
+	if strings.HasPrefix(path, "/api/v1/quotas/") {
 		return "/api/v1/quotas/{tenant_id}"
-	case len(path) > len("/api/v1/customers/") && path[:len("/api/v1/customers/")] == "/api/v1/customers/":
+	}
+	if strings.HasPrefix(path, "/api/v1/customers/") {
 		return "/api/v1/customers/{tenant_id}"
-	default:
+	}
+	if knownPaths[path] {
 		return path
 	}
+	return "/other"
 }

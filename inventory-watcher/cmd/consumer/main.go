@@ -123,7 +123,9 @@ func main() {
 	})
 	g.Go(func() error {
 		<-ctx.Done()
-		return metricsSrv.Close()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return metricsSrv.Shutdown(shutdownCtx)
 	})
 
 	if cfg.IngestListenAddr != "" {
@@ -137,7 +139,7 @@ func main() {
 
 		srv := &http.Server{
 			Addr:           cfg.IngestListenAddr,
-			Handler:        metrics.RequestLogger(logger, panicRecovery(logger, metrics.HTTPMiddleware(auth.Wrap(h.ServeMux())))),
+			Handler:        metrics.RequestLogger(logger, metrics.HTTPMiddleware(panicRecovery(logger, auth.Wrap(h.ServeMux())))),
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
@@ -167,11 +169,12 @@ func main() {
 }
 
 func safeGo(logger *slog.Logger, name string, fn func() error) func() error {
-	return func() error {
+	return func() (err error) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Error("goroutine panic", "component", name,
 					"error", r, "stack", string(debug.Stack()))
+				err = fmt.Errorf("goroutine %s panicked: %v", name, r)
 			}
 		}()
 		return fn()
@@ -185,7 +188,9 @@ func panicRecovery(logger *slog.Logger, next http.Handler) http.Handler {
 				logger.Error("http handler panic", "error", err,
 					"method", r.Method, "path", r.URL.Path,
 					"stack", string(debug.Stack()))
-				http.Error(w, fmt.Sprintf(`{"error":"internal server error"}`), http.StatusInternalServerError)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"internal server error"}`))
 			}
 		}()
 		next.ServeHTTP(w, r)
