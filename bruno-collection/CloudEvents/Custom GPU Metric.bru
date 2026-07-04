@@ -1,0 +1,30 @@
+meta {
+  name: Custom GPU Metric
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/events
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "specversion": "1.0",
+    "type": "osac.gpu.lifecycle",
+    "source": "bruno-demo",
+    "id": "demo-gpu-{{$timestamp}}",
+    "time": "{{$isoTimestamp}}",
+    "subject": "tenant-acme",
+    "datacontenttype": "application/json",
+    "data": {
+      "instance_id": "gpu-i-a100-001",
+      "tenant_id": "tenant-acme",
+      "gpu_memory_gib_seconds": 245760.0,
+      "gpu_compute_seconds": 3600.0,
+      "duration_seconds": 3600
+    }
+  }
+}

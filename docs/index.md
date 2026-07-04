@@ -11,7 +11,6 @@ platform. Built as a standalone Go service outside of
 [Koku](https://github.com/project-koku/koku).
 
 **Deadline:** July 31, 2026
-**Branch:** `osac-cost-consumer`
 
 ## How It Works
 
@@ -28,63 +27,79 @@ OSAC fulfillment-service
     │                                                         │
     └── REST List endpoints ──► Reconciler              cost_entries
                                                               │
-HTTP ingest endpoint ──► MaaS events ──────────►    quota status API
+HTTP ingest endpoint ──► MaaS / custom events ──►   quota status API
+         │                                           report API (JSON/CSV)
+         └── custom metrics config (JSON) ──► arbitrary dimensions
 ```
-
-The system consumes OSAC events in real time, builds an inventory of
-infrastructure resources (VMs, clusters, models), meters their usage, applies
-rates, and produces cost entries with dollar amounts. A quota API lets OSAC
-check whether tenants are within their resource limits.
 
 ## Quick Start
 
-1. [Local dev setup](local-dev-setup.md) — run OSAC + the consumer locally
+1. [Local dev setup](dev/local-dev-setup.md) — run OSAC + the consumer locally
 2. [Demo data setup](../snippets/setup-demo-data.sh) — create VMs, fire MaaS events, populate costs
 3. [Query costs](../snippets/query-costs.sh) — see cost breakdowns by tenant, resource, model
+4. [Bruno collection](../bruno-collection/) — clickable CloudEvent catalog (open in Bruno)
+5. [Grafana stack](../deploy/observability/) — `docker compose up -d` for dashboards
 
 ## Architecture & Design
 
 | Document | What you'll learn |
 |---|---|
-| [Data model](data-model.md) | All 11 tables, ERD diagrams, Go model links, meter definitions |
-| [gRPC messages catalog](grpc-messages-catalog.md) | Every OSAC proto message we consume, linked to [fulfillment-service protos](https://github.com/osac-project/fulfillment-service/tree/main/proto/public/osac/public/v1) |
-| [API reference](api-reference.md) | HTTP endpoints we expose (health, event ingest, quota status) |
-| [Architecture thoughts](thoughts.md) | Original design exploration: why events, how the pipeline works |
-| [Cost reports feasibility](cost-reports-feasibility.md) | What reports we can provide vs what Koku does |
+| [Architecture](poc_architecture/architecture.md) | Overall system architecture and data flow |
+| [Data model](data-model.md) | All tables, ERD diagrams, Go model links, meter definitions |
+| [gRPC messages catalog](grpc-messages-catalog.md) | Every OSAC proto message we consume |
+| [CloudEvents catalog](cloudevents-catalog.md) | CloudEvent types, formats, authoritative sources |
+| [API reference](api-reference.md) | HTTP endpoints, probes, metrics server |
+| [Observability](observability.md) | Prometheus metrics, K8s probes, structured logging, graceful shutdown |
 
 ## Requirements & Status
 
 | Document | What you'll learn |
 |---|---|
-| [Implementation status](implementation-status.md) | Every requirement with acceptance criteria, status, and code links |
-| [Requirements comparison](requirements/requirements-comparison.md) | Updated spec vs original brief — what changed, what's ahead of schedule |
-| [Req #1 gap analysis](requirements/req1-osac-integration-gap-analysis.md) | OSAC integration — inventory, metering, billable states |
-| [Req #2 gap analysis](requirements/req2-maas-costing-gap-analysis.md) | MaaS token metering — consumption-based billing |
-| [Req #8 gap analysis](requirements/req8-bare-metal-gap-analysis.md) | Bare metal costing — OSAC blockers and plan |
-| [Req #10 analysis](requirements/req10-threshold-notifications-analysis.md) | Threshold notifications — delivery models and open questions |
-
-**Spec references:**
-- [Requirements overview](https://github.com/myersCody/cost_ai_grid_poc/blob/main/docs/requirements/poc_requirements_overview.md)
+| [Implementation status](implementation-status.md) | Every requirement with JIRA link, rank, status, and code links |
+| [Requirements overview](requirements/poc_requirements_overview.md) | Canonical spec (v1.2) with priority ranking |
+| [Requirements comparison](requirements/requirements-comparison.md) | Updated spec vs original brief |
+| [OSAC open questions](requirements/osac-open-questions.md) | 20 open questions for the OSAC team |
+| [Req #1 gap analysis](requirements/req1-osac-integration-gap-analysis.md) | OSAC integration |
+| [Req #2 gap analysis](requirements/req2-maas-costing-gap-analysis.md) | MaaS token metering |
+| [Req #8 gap analysis](requirements/req8-bare-metal-gap-analysis.md) | Bare metal costing |
+| [Req #10 analysis](requirements/req10-threshold-notifications-analysis.md) | Threshold notifications |
 
 ## Architecture Decisions
 
 | ADR | Decision |
 |---|---|
-| [ADR-001](decisions/001-metering-sweep-interval.md) | 60-second metering sweep — matches OSAC collector interval and processing SLA |
-| [ADR-002](decisions/002-arguments-against-kafka.md) | No Kafka — gRPC Watch + List reconciliation (Kubernetes pattern) provides same guarantees |
+| [ADR-001](decisions/001-metering-sweep-interval.md) | 60-second metering sweep |
+| [ADR-002](decisions/002-arguments-against-kafka.md) | No Kafka — gRPC Watch + List reconciliation |
+| [ADR-003](decisions/003-heartbeat-emitter-vs-sweep.md) | Local sweep replaces heartbeat collector |
 
 ## Research
 
-| Document | What you'll learn |
+| Document | Topic |
 |---|---|
-| [Rating engine options](research/rating-engine-options.md) | CloudKitty, GoRules/Zen, Drools — what we chose and why |
+| [Rating engine options](research/rating-engine-options.md) | CloudKitty, GoRules/Zen, Drools evaluation |
+| [REQ-13 custom metrics design](research/req13-custom-metrics-design.md) | Config-driven metric extraction |
+| [Koku rate schema alignment](research/koku-rate-schema-alignment.md) | Rate table alignment with Koku |
+| [Koku report API schema](research/koku-report-api-schema.md) | Report format alignment |
+| [MaaS tenant attribution](research/maas-tenant-attribution.md) | Tenant routing for IPP events |
+| [IPP overview](research/ipp-overview.md) | Inference Performance Protocol |
+| [Metering approaches](research/metering-approaches-comparison.md) | Sweep vs event-driven comparison |
+
+## Reviews
+
+| Document | Scope |
+|---|---|
+| [Adversarial review v1](reviews/adversarial-review-v1.md) | Full codebase — 17 findings |
+| [Adversarial review v2](reviews/adversarial-review-v2.md) | Observability PR — 33 total |
+| [Adversarial review v3](reviews/adversarial-review-v3.md) | Custom metrics PR — 41 total, 22 fixed |
 
 ## Demos
 
 | Scenario | What it shows |
 |---|---|
-| [Demo 1: Infrastructure](demo-scenario-1.md) | VM reconciliation, Watch stream, metering sweep, DELETE handling |
-| [Demo 2: MaaS + Cost](demo-scenario-2-maas.md) | Token metering, cost calculation, per-tenant breakdown, throughput |
+| [Demo 1: Full Pipeline](demos/demo-scenario-1.md) | Events → inventory → metering → cost → quotas → MaaS (11 acts) |
+| [Demo 2: MaaS deep dive](demos/demo-scenario-2-maas.md) | Per-tenant and per-model cost drill-down, simulator options, throughput (extends demo 1 Act 11) |
+| [Demo 3: Dashboard](demos/demo-scenario-3-dashboard.md) | Live dashboard, CSV export, per-tenant pricing |
+| [Demo 4: WIP](demos/demo4/) | Observability, custom metrics, CI, CRC (in progress) |
 
 ## Code Map
 
@@ -106,20 +121,30 @@ inventory-watcher/
 │   ├── inventory/
 │   │   ├── store.go                  PostgreSQL schema + all queries
 │   │   └── models.go                 All Go struct types
-│   ├── ingest/handler.go             HTTP API (events, quotas, health)
+│   ├── ingest/handler.go             HTTP API (events, quotas, health, reconcile)
+│   ├── custommetrics/custommetrics.go Config-driven metric extraction (REQ-13)
+│   ├── metrics/metrics.go            Prometheus metric definitions
+│   ├── metrics/middleware.go         HTTP metrics + request logging middleware
 │   └── config/config.go              Environment variable configuration
 └── scripts/
     ├── setup.sh                      Full local setup (DBs, certs, build)
     ├── oidc_server.py                OIDC discovery server for OSAC auth
     └── gen_token.py                  JWT token generator
 
+bruno-collection/                     Clickable CloudEvent catalog (open in Bruno)
+deploy/
+├── observability/                    Prometheus + Grafana docker-compose
+├── custom-metrics-example.json       REQ-13 example config
+└── k8s/                             Kubernetes/CRC manifests
+
 snippets/
-├── setup-demo-data.sh                One-command demo environment
+├── demo-start.sh                     Start all services + show status map
 ├── create-test-data.sh               Populate OSAC with test VMs
-├── send-mock-maas-events.sh          Quick mock MaaS events via DB
+├── setup-demo-data.sh                One-command demo environment
+├── send-mock-maas-events.sh          Quick mock MaaS events
 ├── benchmark-maas.sh                 Throughput benchmark (1700 events/s)
 ├── query-costs.sh                    Cost report queries
-└── test-inventory-watcher.sh         End-to-end test suite (27 assertions)
+└── test-inventory-watcher.sh         End-to-end test suite
 ```
 
 ## Environment Variables
@@ -130,10 +155,14 @@ snippets/
 | `OSAC_TOKEN` | — | Bearer token for OSAC API |
 | `OSAC_CA_CERT` | — | CA certificate path (if HTTPS) |
 | `INVENTORY_DB_URL` | `postgres://user:pass@localhost:5434/costdb` | PostgreSQL connection |
+| `INGEST_LISTEN_ADDR` | — | HTTP API (e.g., `localhost:8020`). Disabled if empty |
+| `METRICS_PORT` | `9000` | Prometheus metrics (separate port, no auth) |
+| `CUSTOM_METRICS_CONFIG` | — | Path to custom metrics JSON config (REQ-13) |
 | `RECONCILE_INTERVAL` | `1h` | How often to reconcile against OSAC |
 | `SUMMARIZE_INTERVAL` | `1h` | Daily summary interval |
-| `INGEST_LISTEN_ADDR` | — | HTTP ingest endpoint (e.g., `localhost:8020`). Disabled if empty. |
-| `LOG_LEVEL` | `info` | Log verbosity |
+| `LOG_LEVEL` | `info` | Log verbosity: debug, info, warn, error |
+| `LOG_FORMAT` | `text` | Log format: `text` or `json` |
+| `AUTH_ISSUER_URL` | — | OIDC issuer URL. Auth disabled if empty |
 
 ## Port Map (Local Development)
 
@@ -141,7 +170,10 @@ snippets/
 |---|---|
 | OSAC gRPC | 8010 |
 | OSAC REST gateway | 8011 |
+| OSAC OIDC server | 8013 |
 | OSAC PostgreSQL | 5433 |
 | Cost inventory PostgreSQL | 5434 |
-| Ingest/quota API | 8020 |
-| OSAC OIDC server | 8013 |
+| Ingest / quota / report API | 8020 |
+| Prometheus metrics | 9000 |
+| Prometheus UI | 9090 |
+| Grafana dashboard | 3000 |

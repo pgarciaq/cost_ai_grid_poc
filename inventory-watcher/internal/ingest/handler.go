@@ -103,16 +103,25 @@ const (
 	maxIDLength        = 256
 )
 
+type Reconciler interface {
+	ReconcileAll(ctx context.Context)
+}
+
 type Handler struct {
 	store         *inventory.Store
 	meter         *metering.Meter
 	cfg           *config.Config
 	customMetrics *custommetrics.Registry
+	reconciler    Reconciler
 	logger        *slog.Logger
 }
 
 func NewHandler(store *inventory.Store, meter *metering.Meter, cfg *config.Config, customMetrics *custommetrics.Registry, logger *slog.Logger) *Handler {
 	return &Handler{store: store, meter: meter, cfg: cfg, customMetrics: customMetrics, logger: logger}
+}
+
+func (h *Handler) SetReconciler(r Reconciler) {
+	h.reconciler = r
 }
 
 func (h *Handler) ServeMux() *http.ServeMux {
@@ -123,6 +132,7 @@ func (h *Handler) ServeMux() *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/reports/summary", h.handlePipelineSummary)
 	mux.HandleFunc("GET /api/v1/customers/", h.handleBalanceCheck)
 	mux.HandleFunc("GET /api/v1/debug/config", h.handleDebugConfig)
+	mux.HandleFunc("POST /api/v1/reconcile", h.handleReconcile)
 	mux.HandleFunc("GET /healthz", h.handleLiveness)
 	mux.HandleFunc("GET /readyz", h.handleReadiness)
 	if h.cfg != nil && h.cfg.DebugDashboard {
@@ -675,8 +685,16 @@ func (h *Handler) handleDebugDashboard(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(dashboardHTML))
 }
 
-// handleLiveness implements Kubernetes liveness probe.
-// Returns 200 if the service is running (can handle traffic).
+func (h *Handler) handleReconcile(w http.ResponseWriter, r *http.Request) {
+	if h.reconciler == nil {
+		writeErrorJSON(w, "reconciler not configured", http.StatusServiceUnavailable)
+		return
+	}
+	go h.reconciler.ReconcileAll(context.Background())
+	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, map[string]string{"status": "reconciliation triggered"})
+}
+
 func (h *Handler) handleLiveness(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	writeJSON(w, map[string]string{"status": "ok"})

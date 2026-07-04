@@ -173,7 +173,7 @@ subscription: "tenant-acme/premium-plan"
 
 ## Current State in Our Code
 
-Source: [handler.go — classifyEvent](../inventory-watcher/internal/ingest/handler.go)
+Source: [handler.go — classifyEvent](../../inventory-watcher/internal/ingest/handler.go)
 
 Currently:
 ```go

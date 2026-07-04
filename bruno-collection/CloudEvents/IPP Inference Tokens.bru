@@ -1,0 +1,35 @@
+meta {
+  name: IPP Inference Tokens
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/events
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "specversion": "1.0",
+    "type": "inference.tokens.used",
+    "source": "rhoai-gateway",
+    "id": "demo-ipp-{{$timestamp}}",
+    "time": "{{$isoTimestamp}}",
+    "subject": "tenant-globex",
+    "datacontenttype": "application/json",
+    "data": {
+      "tenant_id": "tenant-globex",
+      "model_id": "model-codestral-25.01",
+      "model_name": "codestral-25.01",
+      "state": "MODEL_STATE_RUNNING",
+      "prompt_tokens": 15000,
+      "completion_tokens": 8000,
+      "cached_input_tokens": 3000,
+      "reasoning_tokens": 2000,
+      "requests": 42,
+      "duration_seconds": 30
+    }
+  }
+}

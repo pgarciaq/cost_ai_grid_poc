@@ -177,7 +177,7 @@ it just needs: resource_type, resource_id, tenant_id, and meter values.
    rating sweep every 30s. Default MaaS rates seeded on startup:
    $0.50/M input tokens, $1.50/M output tokens, $5.00/M requests. Metering entries are automatically converted to cost
    entries with dollar amounts. See
-   [rating-engine-options.md](research/rating-engine-options.md) for the
+   [rating-engine-options.md](../research/rating-engine-options.md) for the
    research on engine alternatives.
 
 7. **Demo data setup** — `snippets/setup-demo-data.sh` creates 8 production

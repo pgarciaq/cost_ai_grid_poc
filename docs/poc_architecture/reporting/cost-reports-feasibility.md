@@ -1,6 +1,6 @@
 # Cost Reports Feasibility with OSAC
 
-> **See also:** [metering-spec-draft.md](metering-spec-draft.md) — how metering is implemented for the PoC.
+> **See also:** [metering-spec-draft.md](../metering/metering-spec-draft.md) — how metering is implemented for the PoC.
 
 ## Context
 

@@ -1,0 +1,30 @@
+meta {
+  name: Custom Storage Metric
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/events
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "specversion": "1.0",
+    "type": "custom.storage.usage",
+    "source": "bruno-demo",
+    "id": "demo-storage-{{$timestamp}}",
+    "time": "{{$isoTimestamp}}",
+    "subject": "tenant-globex",
+    "datacontenttype": "application/json",
+    "data": {
+      "volume_id": "vol-prod-db-001",
+      "tenant_id": "tenant-globex",
+      "storage_gib_seconds": 1048576.0,
+      "iops_total": 25000,
+      "duration_seconds": 3600
+    }
+  }
+}

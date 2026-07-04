@@ -32,7 +32,7 @@ func New(client *osac.Client, store *inventory.Store, w *watcher.Watcher, interv
 // Run periodically reconciles OSAC state with the local inventory.
 func (r *Reconciler) Run(ctx context.Context) error {
 	// Run an initial reconciliation immediately.
-	r.reconcileAll(ctx)
+	r.ReconcileAll(ctx)
 
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
@@ -42,12 +42,12 @@ func (r *Reconciler) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			r.reconcileAll(ctx)
+			r.ReconcileAll(ctx)
 		}
 	}
 }
 
-func (r *Reconciler) reconcileAll(ctx context.Context) {
+func (r *Reconciler) ReconcileAll(ctx context.Context) {
 	r.logger.Info("starting reconciliation")
 
 	r.reconcileProjects(ctx)

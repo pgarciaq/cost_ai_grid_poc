@@ -141,6 +141,7 @@ func main() {
 
 	if cfg.IngestListenAddr != "" {
 		h := ingest.NewHandler(store, m, cfg, cmRegistry, logger)
+		h.SetReconciler(r)
 
 		auth, err := authn.New(cfg.AuthIssuerURL, cfg.OSACCACert, logger)
 		if err != nil {

@@ -1,0 +1,31 @@
+meta {
+  name: Cluster Create
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/events
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "specversion": "1.0",
+    "type": "osac.cluster.lifecycle",
+    "source": "bruno-demo",
+    "id": "demo-cluster-create-{{$timestamp}}",
+    "time": "{{$isoTimestamp}}",
+    "subject": "tenant-acme",
+    "datacontenttype": "application/json",
+    "data": {
+      "tenant_id": "tenant-acme",
+      "resource_id": "cluster-demo-001",
+      "state": "CLUSTER_STATE_READY",
+      "template": "ocp-4.16-ha",
+      "worker_nodes": 3,
+      "duration_seconds": 60
+    }
+  }
+}
