@@ -83,8 +83,8 @@ check whether tenants are within their resource limits.
 
 | Scenario | What it shows |
 |---|---|
-| [Demo 1: Infrastructure](demo-scenario-1.md) | VM reconciliation, Watch stream, metering sweep, DELETE handling |
-| [Demo 2: MaaS + Cost](demo-scenario-2-maas.md) | Token metering, cost calculation, per-tenant breakdown, throughput |
+| [Demo 1: Infrastructure](demos/demo-scenario-1.md) | VM reconciliation, Watch stream, metering sweep, DELETE handling |
+| [Demo 2: MaaS + Cost](demos/demo-scenario-2-maas.md) | Token metering, cost calculation, per-tenant breakdown, throughput |
 
 ## Code Map
 

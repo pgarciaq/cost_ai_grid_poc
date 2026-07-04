@@ -39,24 +39,48 @@
       ]
     },
     {
-      "title": "Live Resources",
+      "title": "VMs",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 8 },
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 8 },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } },
         "overrides": []
       },
       "targets": [
-        { "expr": "cost_consumer_live_compute_instances", "legendFormat": "VMs", "refId": "A" },
-        { "expr": "cost_consumer_live_clusters", "legendFormat": "Clusters", "refId": "B" },
-        { "expr": "cost_consumer_live_models", "legendFormat": "Models", "refId": "C" }
+        { "expr": "cost_consumer_live_compute_instances", "legendFormat": "VMs", "refId": "A" }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "textMode": "auto", "colorMode": "background" }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name", "colorMode": "background" }
+    },
+    {
+      "title": "Clusters",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "targets": [
+        { "expr": "cost_consumer_live_clusters", "legendFormat": "Clusters", "refId": "A" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name", "colorMode": "background" }
+    },
+    {
+      "title": "Models",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 12 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "targets": [
+        { "expr": "cost_consumer_live_models", "legendFormat": "Models", "refId": "A" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name", "colorMode": "background" }
     },
     {
       "title": "Metering Entries Created (rate/s)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 9, "x": 15, "y": 8 },
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" },
         "overrides": []
@@ -72,7 +96,7 @@
     {
       "title": "Cost Entries Created (rate/s)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "gridPos": { "h": 8, "w": 9, "x": 6, "y": 8 },
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" },
         "overrides": []
@@ -151,7 +175,7 @@
     {
       "title": "Alerts Fired",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 28 },
+      "gridPos": { "h": 8, "w": 4, "x": 0, "y": 28 },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -166,7 +190,7 @@
           "refId": "A"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "textMode": "auto", "colorMode": "background" }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "vertical", "textMode": "value_and_name", "colorMode": "background" }
     },
     {
       "title": "Go Runtime",

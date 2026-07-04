@@ -343,6 +343,6 @@ See [`snippets/query-costs.sh`](../snippets/query-costs.sh) for demo queries.
 | [req8 Gap Analysis](req8-bare-metal-gap-analysis.md) | Bare metal costing — OSAC blockers and implementation plan |
 | [req10 Analysis](req10-threshold-notifications-analysis.md) | Threshold notifications — delivery models, open questions |
 | [Requirements Comparison](requirements-comparison.md) | Updated spec vs original brief |
-| [Demo Scenario 1](demo-scenario-1.md) | Infrastructure metering demo |
-| [Demo Scenario 2](demo-scenario-2-maas.md) | MaaS metering + cost demo |
+| [Demo Scenario 1](demos/demo-scenario-1.md) | Infrastructure metering demo |
+| [Demo Scenario 2](demos/demo-scenario-2-maas.md) | MaaS metering + cost demo |
 | [Local Dev Setup](local-dev-setup.md) | How to run everything |

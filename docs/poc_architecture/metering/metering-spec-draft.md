@@ -369,6 +369,6 @@ All metering entries carry `tenant_id`. Project attribution comes from the inven
 - [Cost calculation and billing spec](../pricing/cost-calculation-spec-draft.md)
 - [Cost model metric feasibility](cost_model_metric_feasibility.md)
 - [Cost reports feasibility](cost-reports-feasibility.md)
-- [Demo scenario](../../demo-scenario-1.md) — end-to-end walkthrough
+- [Demo scenario](../../demos/demo-scenario-1.md) — end-to-end walkthrough
 - [Koku cost model constants](https://github.com/project-koku/koku/blob/main/koku/api/metrics/constants.py)
 - [OSAC metering discover POC](https://github.com/masayag/osac-metering-discover-poc)

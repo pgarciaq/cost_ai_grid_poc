@@ -5,7 +5,24 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/customers/tenant-acme/entitlements/maas_tokens_in/value
+  url: {{baseUrl}}/api/v1/customers/:tenantId/entitlements/:meterName/value
   body: none
   auth: none
+}
+
+params:path {
+  tenantId: tenant-acme
+  meterName: maas_tokens_in
+}
+
+docs {
+  ## Balance Check (IPP)
+
+  IPP-compatible quota check. Returns remaining balance for a meter.
+
+  ### Path Parameters
+
+  **tenantId**: `tenant-acme` | `tenant-globex` | `tenant-initech` | `shared`
+
+  **meterName**: `maas_tokens_in` | `maas_tokens_out` | `maas_requests` | `vm_cpu_core_seconds` | `vm_memory_gib_seconds` | `vm_uptime_seconds`
 }

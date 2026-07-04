@@ -5,7 +5,24 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/reports/costs?group_by=resource_type&format=csv
+  url: {{baseUrl}}/api/v1/reports/costs
   body: none
   auth: none
+}
+
+params:query {
+  group_by: resource_type
+  format: csv
+}
+
+docs {
+  ## Cost Report (CSV)
+
+  Same as JSON report but returns CSV format.
+
+  ### Parameters
+
+  **group_by** (required): `tenant` | `resource_type` | `meter` | `resource`
+
+  **format**: `csv`
 }

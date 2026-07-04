@@ -5,7 +5,27 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/reports/costs?group_by=tenant&tenant_id=tenant-acme
+  url: {{baseUrl}}/api/v1/reports/costs
   body: none
   auth: none
+}
+
+params:query {
+  group_by: tenant
+  tenant_id: tenant-acme
+}
+
+docs {
+  ## Cost Report (JSON)
+
+  Returns cost entries grouped by the specified dimension.
+
+  ### Parameters
+
+  **group_by** (required): `tenant` | `resource_type` | `meter` | `resource`
+
+  **tenant_id** (optional): filter to a single tenant
+    Known tenants: `tenant-acme`, `tenant-globex`, `tenant-initech`, `shared`
+
+  **format**: omit for JSON, use `csv` for CSV export (see "Cost Report (CSV)" request)
 }
