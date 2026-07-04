@@ -63,7 +63,7 @@ is a separate concern owned by the RHCM team.
 | Full stack guide (OSAC + consumer + DB) | Done | [crc-full-deployment.md](dev/crc-full-deployment.md) |
 | OSAC on CRC (cert-manager, CNPG, OIDC) | Done | [crc-osac-deployment.md](dev/crc-osac-deployment.md) |
 | Dev setup guide | Done | [crc-dev-setup.md](dev/crc-dev-setup.md) |
-| Deployment plan (CRC → production path) | Done | [deployment-plan.md](deployment-plan.md) |
+| Deployment plan (CRC → production path) | Done | [crc-full-deployment.md](dev/crc-full-deployment.md) |
 | RHCM Helm chart / OLM | Not started | RHCM team scope |
 
 ---

@@ -49,7 +49,7 @@ check whether tenants are within their resource limits.
 | [Data model](data-model.md) | All 11 tables, ERD diagrams, Go model links, meter definitions |
 | [gRPC messages catalog](grpc-messages-catalog.md) | Every OSAC proto message we consume, linked to [fulfillment-service protos](https://github.com/osac-project/fulfillment-service/tree/main/proto/public/osac/public/v1) |
 | [API reference](api-reference.md) | HTTP endpoints we expose (health, event ingest, quota status) |
-| [Architecture thoughts](thoughts.md) | Original design exploration: why events, how the pipeline works |
+| [Architecture](poc_architecture/architecture.md) | Overall system architecture and data flow |
 | [Cost reports feasibility](cost-reports-feasibility.md) | What reports we can provide vs what Koku does |
 
 ## Requirements & Status
