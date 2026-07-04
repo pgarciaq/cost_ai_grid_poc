@@ -24,11 +24,9 @@ shipped in the initial version.
 
 ## Medium-term
 
-- [ ] **Unpin fulfillment-service in integration test** — currently pinned to
-  `b0c0208c` because HEAD has a migration that crashes on fresh DBs
-  (go-migrate dirty version 69). See `docs/dev/troubleshooting.md`. Need to
-  either wait for OSAC to fix migration 69+, or test with their latest
-  tagged release once they cut one.
+- [x] ~~**Unpin fulfillment-service in integration test**~~ — root cause found:
+  migration 69 calls `uuidv7()` which requires PostgreSQL 18. Fixed by
+  switching CI to `postgres:18`. See `docs/dev/troubleshooting.md`.
 - [ ] **`govulncheck`** — add `golang/govulncheck-action@v1` to scan
   dependencies for known CVEs. Free and fast.
 - [ ] **Test result reporting** — switch to `gotestsum --junitfile results.xml`

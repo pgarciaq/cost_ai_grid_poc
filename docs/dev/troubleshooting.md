@@ -7,19 +7,21 @@
 Dirty database version 69. Fix and force version.
 ```
 
-**Root cause:** The go-migrate library used by fulfillment-service marks
-the `schema_migrations` table as `dirty=true` before running a migration.
-If the process crashes mid-migration (OOM, timeout, network issue), the
-dirty flag stays set and all subsequent starts refuse to proceed.
+**Root cause:** Migration 69 (`69_add_project_column.up.sql`) calls
+`uuidv7()`, which is a **PostgreSQL 18 built-in function**. If you run
+OSAC against PostgreSQL 16 or 17, this function doesn't exist and the
+migration crashes. The go-migrate library marks `schema_migrations` as
+`dirty=true` before running each migration, so the crash leaves the DB
+in a dirty state that blocks all subsequent starts.
 
-This is a known limitation of go-migrate — it has no automatic recovery
-from partial migrations.
+The OSAC team uses PG 18 (via `quay.io/sclorg/postgresql-18-c10s`) in
+their own infrastructure, so they never hit this.
 
 **When it happens:**
-- The gRPC pod starts before PostgreSQL is fully accepting connections
-- A migration at version 69 runs partially and crashes
+- Running OSAC fulfillment-service against PostgreSQL < 18
+- Migration 69 calls `uuidv7()` → PG throws "function does not exist"
+- go-migrate has already set `dirty=true` on `schema_migrations`
 - Every pod restart sees `dirty=true` and exits immediately
-- Kubernetes keeps restarting the pod, but it crashes every time
 
 **Fix (manual / one-time):**
 ```bash

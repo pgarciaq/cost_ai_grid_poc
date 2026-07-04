@@ -44,7 +44,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:16
+          image: postgres:18
           ports:
             - containerPort: 5432
           env:
@@ -208,7 +208,7 @@ spec:
     spec:
       initContainers:
         - name: wait-db
-          image: postgres:16
+          image: postgres:18
           env:
             - name: PGPASSWORD
               value: osacpass
