@@ -192,7 +192,7 @@ via the private Watch stream if we switch to it later.
 **Open question:** Hardware specs (cores/memory) are not on the
 BareMetalInstance proto — they're on the catalog item/template. Currently
 metering uptime only. CPU/memory metering requires catalog item → template
-resolution (see [meeting questions](meeting-questions-osac.md#bare-metal-req-8)).
+resolution (see [OSAC open questions](requirements/osac-open-questions.md#bare-metal-req-8)).
 
 **Related docs:** [req8 gap analysis](req8-bare-metal-gap-analysis.md)
 

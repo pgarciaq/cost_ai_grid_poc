@@ -364,4 +364,4 @@ bash snippets/create-test-data.sh
 - Full deployment plan: `docs/deployment-plan.md`
 - Deployment manifests: `deploy/k8s/`
 - Local dev setup: `docs/dev/local-dev-setup.md`
-- OpenShift deployment summary: `docs/meeting-prep-2026-07-02.md`
+- CRC full deployment guide: `docs/dev/crc-full-deployment.md`
