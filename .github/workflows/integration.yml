@@ -121,13 +121,11 @@ jobs:
 
       - name: Wait for pods
         run: |
-          echo "--- OSAC pods ---"
-          kubectl wait --for=condition=ready pod -l app=osac-db -n osac --timeout=180s
+          echo "--- Waiting for all pods ---"
+          sleep 15
           kubectl wait --for=condition=available deployment/osac-oidc -n osac --timeout=180s
           kubectl wait --for=condition=available deployment/osac-grpc -n osac --timeout=180s
           kubectl wait --for=condition=available deployment/osac-rest -n osac --timeout=180s
-          echo "--- Cost pods ---"
-          kubectl wait --for=condition=ready pod -l app=cost-db -n cost-mgmt --timeout=180s
           kubectl wait --for=condition=available deployment/cost-event-consumer -n cost-mgmt --timeout=180s
           echo "--- All pods ---"
           kubectl get pods -A

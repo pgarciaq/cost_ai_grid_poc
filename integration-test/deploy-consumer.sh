@@ -76,6 +76,7 @@ spec:
 K8S
 
 echo "Waiting for cost PostgreSQL..."
+sleep 10
 kubectl wait --for=condition=ready pod -l app=cost-db -n cost-mgmt --timeout=180s
 
 cat <<'K8S' | kubectl apply -f -

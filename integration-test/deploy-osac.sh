@@ -81,6 +81,7 @@ spec:
 K8S
 
 echo "Waiting for OSAC PostgreSQL..."
+sleep 10
 kubectl wait --for=condition=ready pod -l app=osac-db -n osac --timeout=180s
 
 # OIDC mock server
