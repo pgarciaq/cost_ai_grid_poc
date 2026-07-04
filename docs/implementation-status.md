@@ -338,7 +338,7 @@ still seeded as defaults. Future: auto-create rates from catalog item pricing.
 
 **What works:** The report API is functional for on-demand use. Groups by 4 dimensions, filters by tenant/resource_type/period, exports CSV and JSON with Koku-compatible cost type split.
 
-See also: [`snippets/query-costs.sh`](../snippets/query-costs.sh) for demo queries, [Bruno collection](../../bruno-collection/) for interactive testing.
+See also: [`snippets/query-costs.sh`](../snippets/query-costs.sh) for demo queries, [Bruno collection](../bruno-collection/) for interactive testing.
 
 ---
 
