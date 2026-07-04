@@ -206,6 +206,10 @@ spec:
       labels:
         app: osac-grpc
     spec:
+      initContainers:
+        - name: wait-db
+          image: postgres:16
+          command: ["sh", "-c", "until pg_isready -h osac-db -U osacuser; do sleep 2; done"]
       containers:
         - name: grpc
           image: osac-fulfillment-service:ci
