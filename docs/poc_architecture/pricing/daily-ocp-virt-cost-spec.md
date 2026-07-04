@@ -3,13 +3,13 @@
 > **Status:** PoC draft
 > **Requirements:** REQ-12
 > **Priority:** TBD — pending Product Management confirmation
-> **Related:** [metering-spec-draft.md](metering-spec-draft.md) · [cost-calculation-spec-draft.md](../pricing/cost-calculation-spec-draft.md) · [ai-grid-reporting-api.md](../reporting/ai-grid-reporting-api.md) · [architecture.md](../architecture.md)
+> **Related:** [metering-spec-draft.md](../metering/metering-spec-draft.md) · [cost-calculation-spec-draft.md](../pricing/cost-calculation-spec-draft.md) · [ai-grid-reporting-api.md](../reporting/ai-grid-reporting-api.md) · [architecture.md](../architecture.md)
 
 ---
 
 ## 1. Purpose
 
-This spec defines how Cost Management produces **closed daily cost totals** for OpenShift Virtualization (VMaaS) workloads provisioned through OSAC. It is a companion to [metering-spec-draft.md](metering-spec-draft.md), which defines the 60-second capacity metering pipeline.
+This spec defines how Cost Management produces **closed daily cost totals** for OpenShift Virtualization (VMaaS) workloads provisioned through OSAC. It is a companion to [metering-spec-draft.md](../metering/metering-spec-draft.md), which defines the 60-second capacity metering pipeline.
 
 **This spec answers:** what did a tenant's OpenShift Virtualization workloads cost, per day, in a form suitable for billing statements and chargeback reports?
 
@@ -396,7 +396,7 @@ The `/reports/chargeback` endpoint (REQ-5) also reads from `daily_cost_summary` 
 ## 14. References
 
 - [REQ-12](../../requirements/poc_requirements_overview.md) — Daily OpenShift Virtualization Costs
-- [metering-spec-draft.md](metering-spec-draft.md) — 60s capacity metering pipeline (input to this spec)
+- [metering-spec-draft.md](../metering/metering-spec-draft.md) — 60s capacity metering pipeline (input to this spec)
 - [cost-calculation-spec-draft.md](../pricing/cost-calculation-spec-draft.md) — rate schema and cost formula
 - [ai-grid-reporting-api.md](../reporting/ai-grid-reporting-api.md) — `/costs/timeseries` and `/reports/chargeback` endpoints
 - [ADR-001: Metering sweep interval](../../decisions/001-metering-sweep-interval.md)

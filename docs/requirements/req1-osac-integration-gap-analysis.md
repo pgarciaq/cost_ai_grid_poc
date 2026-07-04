@@ -141,7 +141,7 @@ CloudEvents is an interoperability standard — a standardized envelope around
 the same data. For the PoC, the Watch stream works and provides the same
 information. The CloudEvents envelope would become important if Kafka is
 introduced as transport, but we argue against Kafka for this use case — see
-[ADR-002: Arguments Against Kafka](decisions/002-arguments-against-kafka.md).
+[ADR-002: Arguments Against Kafka](../decisions/002-arguments-against-kafka.md).
 The gRPC Watch stream + List reconciliation pattern (the proven Kubernetes
 controller pattern) provides the same delivery guarantees with no additional
 infrastructure.
@@ -225,7 +225,7 @@ checking and the 60-second processing SLA.
    `vm_uptime_seconds`, `vm_cpu_core_seconds`, `vm_memory_gib_seconds`.
    Duration is tracked via `last_metered_at` on inventory records. On DELETE
    events, final metering entries capture usage up to the deletion timestamp.
-   See [ADR-001](decisions/001-metering-sweep-interval.md) for the 60-second
+   See [ADR-001](../decisions/001-metering-sweep-interval.md) for the 60-second
    interval decision.
 
 3. **Billable state filtering** — only RUNNING compute instances produce

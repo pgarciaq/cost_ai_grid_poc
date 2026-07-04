@@ -2,7 +2,7 @@
 
 > **Status:** PoC draft
 > **Requirements:** POC-ARCH, REQ-1b, REQ-2, REQ-1a
-> **Related:** [architecture.md](../architecture.md) · [event-types.md](../event-types.md) · [cost-calculation-spec-draft.md](../pricing/cost-calculation-spec-draft.md) · [cost_model_metric_feasibility.md](cost_model_metric_feasibility.md) · [cost-reports-feasibility.md](cost-reports-feasibility.md)
+> **Related:** [architecture.md](../architecture.md) · [event-types.md](../event-types.md) · [cost-calculation-spec-draft.md](../pricing/cost-calculation-spec-draft.md) · [cost_model_metric_feasibility.md](cost_model_metric_feasibility.md) · [cost-reports-feasibility.md](../reporting/cost-reports-feasibility.md)
 
 ---
 
