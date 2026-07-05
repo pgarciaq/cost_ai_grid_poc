@@ -58,17 +58,18 @@ digraph maas_flow {
         ingest [label="Ingest CloudEvent\nPOST /api/v1/events\n→ metering → rating → cost entry" shape=box style="filled,rounded" fillcolor="#A5D6A7" color="#2E7D32"]
     }
 
+    ingest -> user [style=invis constraint=false weight=5]
     // ── Request flow (top to bottom) ──
     user -> auth [label="1. inference request" color="#0277BD" fontcolor="#0277BD"]
     auth -> req_plugins [label="2. + identity headers" color="#E65100" fontcolor="#E65100"]
     req_plugins -> metering_req [label="3. before forwarding" color="#F57F17" fontcolor="#F57F17"]
     metering_req -> balance [label="4. sync call: has budget?" color="#2E7D32" fontcolor="#2E7D32" style=dashed]
-    balance -> metering_req [label="hasAccess: true/false" color="#2E7D32" fontcolor="#2E7D32" style=dashed]
+    balance -> metering_req [label="hasAccess: true/false" color="#2E7D32" fontcolor="#2E7D32" style=dashed constraint=false]
     metering_req -> llm [label="5. forward to provider\n(or 429 if no budget)" color="#7B1FA2" fontcolor="#7B1FA2"]
 
     // ── Response flow (bottom to top) ──
     llm -> resp_plugins [label="6. response with usage block" color="#7B1FA2" fontcolor="#7B1FA2"]
     resp_plugins -> metering_resp [label="7. after response" color="#F57F17" fontcolor="#F57F17"]
     metering_resp -> ingest [label="8. CloudEvent: inference.tokens.used\n(fire & forget)" color="#2E7D32" fontcolor="#2E7D32" style=dashed]
-    metering_resp -> user [label="9. response to user" color="#0277BD" fontcolor="#0277BD"]
+    metering_resp -> user [label="9. response to user" color="#0277BD" fontcolor="#0277BD" constraint=false]
 }
