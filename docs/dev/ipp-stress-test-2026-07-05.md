@@ -138,6 +138,24 @@ All 1000 events ingested → 2204 metering entries → 1202 cost entries
 - Sustained test: **848 req/s for 30 seconds straight**, zero errors
 - All 40,456 events ingested: 41,532 raw_events, 83,064 metering_entries
 
+## With vs Without Unique Constraint on raw_events
+
+The `raw_events` table can optionally have a unique index on `event_id`
+for dedup. Without it, the table is append-only (faster). All tests
+above were run **without** the constraint.
+
+Re-run with `CREATE UNIQUE INDEX ON raw_events (event_id)`:
+
+| Test | Concurrency | Without | With | Delta |
+|------|-------------|---------|------|-------|
+| Baseline | 10 | 803 req/s | 733 req/s | **-9%** |
+| High | 50 | 860 req/s | 812 req/s | **-6%** |
+| Max | 100 | 873 req/s | 807 req/s | **-8%** |
+| Sustained 30s | 20 | 848 req/s | 753 req/s | **-11%** |
+
+**Cost of dedup: 6-11% throughput.** Latency impact is minimal (1-2ms).
+Zero errors in both configurations — all requests succeed regardless.
+
 ### Environment notes
 
 - All components are single-replica on a local k3d cluster (ARM Mac via QEMU)
