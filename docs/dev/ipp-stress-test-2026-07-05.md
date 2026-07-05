@@ -76,6 +76,46 @@ is much lower — see metrics below.
 Both well within the IPP's 5-second timeout. The balance check is
 sub-millisecond.
 
+## Load Test with hey (proper benchmark)
+
+The 4.1 req/s figure above was limited by `kubectl exec` shell overhead
+(~200ms per call). Proper load test with `hey` via port-forward:
+
+```
+hey -n 1000 -c 10 -m POST \
+  -H "x-maas-username: hey-user" \
+  -H "x-maas-group: tenant-hey" \
+  -H "x-maas-subscription: tenant-hey/plan" \
+  -d '{"model":"test-model","messages":[...]}' \
+  http://localhost:18080/v1/chat/completions
+```
+
+| Metric | Value |
+|--------|-------|
+| Total requests | 1000 |
+| Concurrency | 10 |
+| Success | **1000 (100%)** |
+| Duration | **1.41s** |
+| Throughput | **708 req/s** |
+| Avg latency | **14ms** |
+| P50 | 13ms |
+| P95 | 21ms |
+| P99 | 38ms |
+| Fastest | 4.7ms |
+| Slowest | 79ms |
+
+All 1000 events ingested → 2204 metering entries → 1202 cost entries
+(after rating sweep).
+
+### Cost by tenant (after load test)
+
+| Tenant | Entries | Total Cost |
+|--------|---------|------------|
+| tenant-hey | 1000 | $0.007998 |
+| tenant-1 | 68 | $0.000612 |
+| tenant-2 | 66 | $0.000594 |
+| tenant-0 | 66 | $0.000594 |
+
 ## Known Issue
 
 The IPP logs `"failed to report usage to metering system: usage report
