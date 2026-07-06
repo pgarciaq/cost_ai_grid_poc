@@ -150,11 +150,6 @@ This is unresolved in the architectural decisions table. For the PoC, a practica
 | OSAC owns tiers, Cost reads them | Small | Medium | Requires OSAC to expose a tiers endpoint Cost can poll |
 | Both synced | Medium | High | Bilateral sync; conflict resolution needed |
 
-**Recommended for PoC:** Cost owns tier configuration. Tiers are seeded via
-`SeedDefaultRates` or inserted through `POST /api/v1/rates`. OSAC reads
-pricing outcomes via the cost report API; it does not push tier definitions.
-OSAC sync is post-PoC.
-
 ## Implementation Options for PoC
 
 ### Option A: Per-Event Only — MaaS Demo, Skip Capacity Tiers
@@ -185,32 +180,11 @@ rating sweep, updated cost entry attribution.
 **Benefit:** Correct behavior for the GiB-month spec example; no demo
 scripting constraints for capacity workloads.
 
-## Recommended Approach
-
-**Option A for the PoC, but with an explicit scope correction in the spec.**
-
-The per-event implementation is correct for MaaS and the demo can
-demonstrate tiered pricing there without any code changes. The important
-steps are:
-
-1. **Update the spec** to remove or replace the GiB-month capacity tier
-   example, or explicitly mark it as post-PoC. Demoing it as-is would
-   produce incorrect billing behavior.
-2. **Resolve the ownership question:** Cost owns tiers for PoC; OSAC sync
-   is post-PoC.
-3. **Add a tiered MaaS rate to `SeedDefaultRates`** (e.g., `maas_tokens_in`
-   with a free tier + paid tier) so tier support is visible in a default
-   deployment without manual DB setup.
-
-Add **Option B** (cumulative capacity tiers) post-PoC as part of the
-production rate engine, alongside price list lifecycle work
-(COST-575, COST-7327, COST-7328).
-
 ## Open Questions
 
 ### 1. Tier ownership for PoC
 
-Cost or OSAC? Recommended above: Cost owns it for PoC. Needs explicit sign-off.
+Cost or OSAC? Needs sign-off.
 
 ### 2. Demo scope: MaaS only, or capacity tiers too?
 
