@@ -1,8 +1,11 @@
 package metrics
 
 import (
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -72,6 +75,71 @@ func TestStatusWriter_DefaultsTo200(t *testing.T) {
 
 	if sw.status != http.StatusOK {
 		t.Errorf("default status: got %d, want 200", sw.status)
+	}
+}
+
+func TestRequestLogger_LogsRequest(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := RequestLogger(logger, handler)
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	rec := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rec, req)
+
+	log := buf.String()
+	if !strings.Contains(log, "GET") {
+		t.Error("log should contain method")
+	}
+	if !strings.Contains(log, "/healthz") {
+		t.Error("log should contain path")
+	}
+	if !strings.Contains(log, "request_id") {
+		t.Error("log should contain request_id")
+	}
+}
+
+func TestRequestLogger_UsesXRequestID(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := RequestLogger(logger, handler)
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	req.Header.Set("X-Request-ID", "my-custom-id")
+	rec := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rec, req)
+
+	if !strings.Contains(buf.String(), "my-custom-id") {
+		t.Error("log should contain custom X-Request-ID")
+	}
+}
+
+func TestRequestLogger_ProbesAtDebugLevel(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := RequestLogger(logger, handler)
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	rec := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rec, req)
+
+	if buf.String() != "" {
+		t.Errorf("probe requests at INFO level should be silent, got: %s", buf.String())
 	}
 }
 
