@@ -292,7 +292,7 @@ stripping is a convenience for config authors who think of the CloudEvents
 | 14 | Unbounded slice allocation | Low | Open |
 | 15 | No request IDs/tracing | Low | Fixed |
 | 16 | UTC timezone assumption | Info | Accepted |
-| 17 | No CI pipeline | Info | Open |
+| 17 | No CI pipeline | Info | **Fixed** |
 | 18 | `safeGo` silently kills goroutine | High | **Fixed** |
 | 19 | Unbounded `tenant_id` metric label | High | **Fixed** |
 | 20 | Middleware ordering hides panics | High | **Fixed** |
@@ -301,7 +301,7 @@ stripping is a convenience for config authors who think of the CloudEvents
 | 23 | `normalizePath` fragility | Medium | Partially fixed |
 | 24 | `rand.Read` error ignored | Low | Open |
 | 25 | Request ID not in context | Low | Open |
-| 26 | No middleware tests | Low | Open |
+| 26 | No middleware tests | Low | **Fixed** |
 | 27 | Stale resource gauges | Low | Accepted (PoC) |
 | 28 | 404 path cardinality attack | Medium | **Fixed** |
 | 29 | Probe log noise | Low | **Fixed** |
@@ -309,13 +309,13 @@ stripping is a convenience for config authors who think of the CloudEvents
 | 31 | No sweep error metrics | Low | Open |
 | 32 | Panic response Content-Type | Info | **Fixed** |
 | 33 | Import grouping | Info | **Fixed** |
-| **34** | **`toFloat64` partial string parse** | **Medium** | **Open** |
-| **35** | **Negative meter values accepted** | **Medium** | **Open** |
+| **34** | **`toFloat64` partial string parse** | **Medium** | **Fixed** |
+| **35** | **Negative meter values accepted** | **Medium** | **Fixed** |
 | **36** | **Config-driven metric cardinality** | **Medium** | **Accepted (PoC)** |
 | **37** | **Double JSON unmarshal** | **Low** | **Accepted (PoC)** |
 | **38** | **Classify fallback overwrites** | **Low** | **Accepted (PoC)** |
 | **39** | **No config hot-reload** | **Low** | **Accepted (PoC)** |
-| **40** | **Shadow warning unclear** | **Low** | **Open** |
+| **40** | **Shadow warning unclear** | **Low** | **Fixed** |
 | **41** | **`data.` prefix stripping** | **Info** | **Accepted** |
 
 ---
