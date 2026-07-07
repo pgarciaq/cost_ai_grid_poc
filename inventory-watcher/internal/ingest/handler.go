@@ -442,6 +442,16 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
+func CsvSafe(s string) string {
+	if len(s) > 0 && (s[0] == '=' || s[0] == '+' || s[0] == '-' || s[0] == '@') {
+		return "'" + s
+	}
+	if strings.ContainsAny(s, ",\"\n") {
+		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
+	}
+	return s
+}
+
 func writeErrorJSON(w http.ResponseWriter, msg string, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -606,7 +616,7 @@ func (h *Handler) handleCostReport(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "group,entries,cost,infrastructure_cost,supplementary_cost,currency")
 		for _, row := range rows {
 			fmt.Fprintf(w, "%s,%d,%.6f,%.6f,%.6f,%s\n",
-				row.Group, row.Entries, row.Cost, row.InfrastructureCost, row.SupplementaryCost, row.Currency)
+				CsvSafe(row.Group), row.Entries, row.Cost, row.InfrastructureCost, row.SupplementaryCost, CsvSafe(row.Currency))
 		}
 		return
 	}
