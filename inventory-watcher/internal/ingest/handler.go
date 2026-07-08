@@ -35,7 +35,7 @@ type CloudEvent struct {
 // ComputeInstanceEventData matches the OSAC metering collector VMaaS schema.
 // Source: https://github.com/masayag/osac-metering-discover-poc/blob/main/collector/README.md#cloudevents-schema
 type ComputeInstanceEventData struct {
-	DurationSeconds  int    `json:"duration_seconds"`
+	DurationSeconds  float64 `json:"duration_seconds"`
 	CPUCoreSeconds   int64  `json:"cpu_core_seconds"`
 	MemoryGiBSeconds int64  `json:"memory_gib_seconds"`
 	TenantID         string `json:"tenant_id"`
@@ -50,8 +50,8 @@ type ComputeInstanceEventData struct {
 // ClusterEventData matches the OSAC metering collector CaaS schema.
 // Source: https://github.com/masayag/osac-metering-discover-poc/blob/main/collector/README-caas.md#cloudevents-schema
 type ClusterEventData struct {
-	DurationSeconds   int    `json:"duration_seconds"`
-	WorkerNodeSeconds int64  `json:"worker_node_seconds"`
+	DurationSeconds   float64 `json:"duration_seconds"`
+	WorkerNodeSeconds int64   `json:"worker_node_seconds"`
 	NodeCount         int32  `json:"node_count"`
 	TenantID          string `json:"tenant_id"`
 	ClusterID         string `json:"cluster_id"`
@@ -73,8 +73,8 @@ type MaaSEventData struct {
 	TokensIn        int64  `json:"tokens_in"`
 	TokensOut       int64  `json:"tokens_out"`
 	Requests        int64  `json:"requests"`
-	DurationSeconds int    `json:"duration_seconds"`
-	RequestCount    int64  `json:"request_count"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	RequestCount    int64   `json:"request_count"`
 	// IPP external-metering plugin fields (authoritative format).
 	// organization_id and cost_center are proposed additions to the IPP
 	// CloudEvent payload for tenant attribution without subscription parsing.
@@ -250,7 +250,7 @@ func (h *Handler) handleComputeInstanceEvent(ctx context.Context, ce CloudEvent)
 	}
 
 	if data.DurationSeconds <= 0 {
-		return fmt.Errorf("invalid duration_seconds: %d (must be positive)", data.DurationSeconds)
+		return fmt.Errorf("invalid duration_seconds: %g (must be positive)", data.DurationSeconds)
 	}
 
 	if err := h.store.UpsertComputeInstance(ctx, inventory.ComputeInstanceRecord{
@@ -259,13 +259,13 @@ func (h *Handler) handleComputeInstanceEvent(ctx context.Context, ce CloudEvent)
 		Cores:       data.Cores,
 		MemoryGiB:   data.MemoryGiB,
 		State:       data.State,
-		CreatedAt:   ce.Time.Add(-time.Duration(data.DurationSeconds) * time.Second),
+		CreatedAt:   ce.Time.Add(-time.Duration(data.DurationSeconds * float64(time.Second))),
 		LastEventID: ce.ID,
 	}); err != nil {
 		return err
 	}
 
-	periodStart := ce.Time.Add(-time.Duration(data.DurationSeconds) * time.Second)
+	periodStart := ce.Time.Add(-time.Duration(data.DurationSeconds * float64(time.Second)))
 
 	entries := []inventory.MeteringEntry{
 		{ResourceType: "compute_instance", ResourceID: data.InstanceID, TenantID: data.TenantID, MeterName: "vm_uptime_seconds", Value: float64(data.DurationSeconds), Unit: "seconds", PeriodStart: periodStart, PeriodEnd: ce.Time},
@@ -296,10 +296,10 @@ func (h *Handler) handleClusterEvent(ctx context.Context, ce CloudEvent) error {
 	}
 
 	if data.DurationSeconds <= 0 {
-		return fmt.Errorf("invalid duration_seconds: %d (must be positive)", data.DurationSeconds)
+		return fmt.Errorf("invalid duration_seconds: %g (must be positive)", data.DurationSeconds)
 	}
 
-	periodStart := ce.Time.Add(-time.Duration(data.DurationSeconds) * time.Second)
+	periodStart := ce.Time.Add(-time.Duration(data.DurationSeconds * float64(time.Second)))
 
 	var entries []inventory.MeteringEntry
 
@@ -360,10 +360,10 @@ func (h *Handler) handleModelEvent(ctx context.Context, ce CloudEvent) error {
 		data.TenantID = data.User
 	}
 	if data.DurationSeconds < 0 {
-		return fmt.Errorf("invalid duration_seconds: %d (must be non-negative)", data.DurationSeconds)
+		return fmt.Errorf("invalid duration_seconds: %g (must be non-negative)", data.DurationSeconds)
 	}
 	if data.DurationMs > 0 && data.DurationSeconds == 0 {
-		data.DurationSeconds = int(data.DurationMs / 1000)
+		data.DurationSeconds = float64(data.DurationMs) / 1000.0
 	}
 	if data.RequestCount > 0 && data.Requests == 0 {
 		data.Requests = data.RequestCount
@@ -372,7 +372,7 @@ func (h *Handler) handleModelEvent(ctx context.Context, ce CloudEvent) error {
 		data.State = "MODEL_STATE_RUNNING"
 	}
 
-	createdAt := ce.Time.Add(-time.Duration(data.DurationSeconds) * time.Second)
+	createdAt := ce.Time.Add(-time.Duration(data.DurationSeconds * float64(time.Second)))
 	if err := h.store.UpsertModel(ctx, inventory.ModelRecord{
 		ModelID:     data.ModelID,
 		Name:        data.ModelName,
@@ -445,6 +445,16 @@ func classifyEvent(ce CloudEvent) (resourceType, resourceID, tenantID string) {
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+
+func CsvSafe(s string) string {
+	if len(s) > 0 && (s[0] == '=' || s[0] == '+' || s[0] == '-' || s[0] == '@') {
+		return "'" + s
+	}
+	if strings.ContainsAny(s, ",\"\n") {
+		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
+	}
+	return s
 }
 
 func writeErrorJSON(w http.ResponseWriter, msg string, status int) {
@@ -611,7 +621,7 @@ func (h *Handler) handleCostReport(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "group,entries,cost,infrastructure_cost,supplementary_cost,currency")
 		for _, row := range rows {
 			fmt.Fprintf(w, "%s,%d,%.6f,%.6f,%.6f,%s\n",
-				row.Group, row.Entries, row.Cost, row.InfrastructureCost, row.SupplementaryCost, row.Currency)
+				CsvSafe(row.Group), row.Entries, row.Cost, row.InfrastructureCost, row.SupplementaryCost, CsvSafe(row.Currency))
 		}
 		return
 	}
