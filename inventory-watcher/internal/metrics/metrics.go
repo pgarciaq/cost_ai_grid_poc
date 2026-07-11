@@ -43,6 +43,18 @@ var (
 		Help:      "Cost entries produced by rating.",
 	}, []string{"resource_type", "cost_type"})
 
+	MeteringSweepErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "metering_sweep_errors_total",
+		Help:      "Errors during metering sweep.",
+	})
+
+	RatingSweepErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "rating_sweep_errors_total",
+		Help:      "Errors during rating sweep.",
+	})
+
 	MeteringSweepDuration = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Name:      "metering_sweep_duration_seconds",
@@ -101,5 +113,27 @@ var (
 		Namespace: namespace,
 		Name:      "live_models",
 		Help:      "Active MaaS models in inventory.",
+	})
+)
+
+// Splunk forwarder metrics.
+var (
+	SplunkForwardTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "splunk_forward_total",
+		Help:      "Raw events forwarded to Splunk HEC.",
+	})
+
+	SplunkForwardErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "splunk_forward_errors_total",
+		Help:      "Errors forwarding to Splunk HEC.",
+	})
+
+	SplunkForwardDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Name:      "splunk_forward_duration_seconds",
+		Help:      "Splunk forward sweep duration.",
+		Buckets:   prometheus.DefBuckets,
 	})
 )

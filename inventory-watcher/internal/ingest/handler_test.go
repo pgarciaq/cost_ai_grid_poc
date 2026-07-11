@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -774,6 +776,96 @@ func TestIngestIPPAuthoritativeFormat(t *testing.T) {
 	}
 }
 
+// TestTenantAttribution_OrganizationID verifies that organization_id takes
+// priority over subscription/group/user for tenant attribution.
+// Confirmed by Noy (via Kris, open questions doc) as "the right approach."
+func TestTenantAttribution_OrganizationID(t *testing.T) {
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	modelID := "org-attr-" + suffix
+
+	payload := fmt.Sprintf(`{
+		"specversion": "1.0",
+		"type": "inference.tokens.used",
+		"source": "maas-gateway",
+		"id": "org-attr-%s",
+		"time": "%s",
+		"subject": "jdoe",
+		"data": {
+			"user": "jdoe",
+			"group": "finance-team",
+			"subscription": "ai-tenant-acme/premium-sub@models/llama-3",
+			"organization_id": "acme-corp",
+			"model": "%s",
+			"prompt_tokens": 100,
+			"completion_tokens": 50,
+			"duration_ms": 500
+		}
+	}`, suffix, time.Now().UTC().Format(time.RFC3339), modelID)
+
+	resp, err := http.Post(testServer.URL+"/api/v1/events", "application/json",
+		bytes.NewReader([]byte(payload)))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", resp.StatusCode)
+	}
+
+	var tenant string
+	testStore.Pool().QueryRow(context.Background(),
+		"SELECT tenant FROM inventory_model WHERE model_id = $1", modelID).Scan(&tenant)
+	if tenant != "acme-corp" {
+		t.Errorf("expected tenant = acme-corp (from organization_id), got %s", tenant)
+	}
+}
+
+// TestTenantAttribution_SubscriptionNamespace verifies that the ai-tenant-{name}
+// prefix is stripped when parsing tenant from subscription namespace.
+// Format confirmed by Mpaul (Slack #wg-osac-maas 2026-07-09).
+func TestTenantAttribution_SubscriptionNamespace(t *testing.T) {
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	modelID := "sub-attr-" + suffix
+
+	payload := fmt.Sprintf(`{
+		"specversion": "1.0",
+		"type": "inference.tokens.used",
+		"source": "maas-gateway",
+		"id": "sub-attr-%s",
+		"time": "%s",
+		"subject": "jdoe",
+		"data": {
+			"user": "jdoe",
+			"group": "finance-team",
+			"subscription": "ai-tenant-globex/standard-sub@models/codestral",
+			"model": "%s",
+			"prompt_tokens": 200,
+			"completion_tokens": 100,
+			"duration_ms": 800
+		}
+	}`, suffix, time.Now().UTC().Format(time.RFC3339), modelID)
+
+	resp, err := http.Post(testServer.URL+"/api/v1/events", "application/json",
+		bytes.NewReader([]byte(payload)))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", resp.StatusCode)
+	}
+
+	var tenant string
+	testStore.Pool().QueryRow(context.Background(),
+		"SELECT tenant FROM inventory_model WHERE model_id = $1", modelID).Scan(&tenant)
+	// "ai-tenant-globex" → stripped to "globex"
+	if tenant != "globex" {
+		t.Errorf("expected tenant = globex (ai-tenant- prefix stripped), got %s", tenant)
+	}
+}
+
 // TestBalanceCheckResponseFormat verifies the balance check endpoint returns
 // the exact response format expected by the IPP external-metering plugin.
 // Source: https://github.com/opendatahub-io/ai-gateway-payload-processing/blob/61b6160/pkg/plugins/external-metering/client.go
@@ -1131,6 +1223,226 @@ func TestBatchMeteringEntryIncludesProjectID(t *testing.T) {
 	}
 	if count != 3 {
 		t.Errorf("expected 3 metering entries from batch insert, got %d", count)
+	}
+}
+
+func TestCsvSafe(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"hello", "hello"},
+		{"=cmd()", "'=cmd()"},
+		{"+cmd()", "'+cmd()"},
+		{"-cmd()", "'-cmd()"},
+		{"@cmd()", "'@cmd()"},
+		{"has,comma", "\"has,comma\""},
+		{`has"quote`, `"has""quote"`},
+		{"has\nnewline", "\"has\nnewline\""},
+		{"", ""},
+	}
+	for _, tc := range tests {
+		got := ingest.CsvSafe(tc.in)
+		if got != tc.want {
+			t.Errorf("ingest.CsvSafe(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func seedCostEntries(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	yesterday := now.AddDate(0, 0, -1)
+
+	testStore.Pool().Exec(ctx, "DELETE FROM cost_entries")
+
+	// Seed a rate if none exist (tests may run in any order)
+	rateID, _ := testStore.UpsertRate(ctx, inventory.RateRecord{
+		ResourceType: "compute_instance", MeterName: "vm_uptime_seconds",
+		CostType: "Infrastructure", PricePerUnit: 0.01, Currency: "USD",
+		EffectiveFrom: now.AddDate(-1, 0, 0),
+	})
+	if rateID == 0 {
+		rateID = 1
+	}
+
+	maasRateID, _ := testStore.UpsertRate(ctx, inventory.RateRecord{
+		ResourceType: "model", MeterName: "maas_tokens_in",
+		CostType: "Supplementary", PricePerUnit: 0.001, Currency: "USD",
+		EffectiveFrom: now.AddDate(-1, 0, 0),
+	})
+	if maasRateID == 0 {
+		maasRateID = 2
+	}
+
+	testStore.InsertCostEntry(ctx, inventory.CostEntry{
+		MeteringEntryID: 1, RateID: rateID, TenantID: "tenant-a", ProjectID: "proj-1",
+		ResourceType: "compute_instance", ResourceID: "vm-1", MeterName: "vm_uptime_seconds",
+		MeteredValue: 3600, CostAmount: 0.01, Currency: "USD",
+		PeriodStart: yesterday, PeriodEnd: yesterday.Add(time.Hour),
+	})
+	testStore.InsertCostEntry(ctx, inventory.CostEntry{
+		MeteringEntryID: 2, RateID: maasRateID, TenantID: "tenant-a", ProjectID: "proj-1",
+		ResourceType: "model", ResourceID: "llama-3", MeterName: "maas_tokens_in",
+		MeteredValue: 1000, CostAmount: 0.001, Currency: "USD",
+		PeriodStart: now.Add(-time.Hour), PeriodEnd: now,
+	})
+	testStore.InsertCostEntry(ctx, inventory.CostEntry{
+		MeteringEntryID: 3, RateID: maasRateID, TenantID: "tenant-b", ProjectID: "proj-2",
+		ResourceType: "model", ResourceID: "llama-3", MeterName: "maas_tokens_in",
+		MeteredValue: 500, CostAmount: 0.0005, Currency: "USD",
+		PeriodStart: now.Add(-time.Hour), PeriodEnd: now,
+	})
+}
+
+func TestCostReport_GroupByTenant(t *testing.T) {
+	seedCostEntries(t)
+	resp, err := http.Get(testServer.URL + "/api/v1/reports/costs?group_by=tenant")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	meta := result["meta"].(map[string]any)
+	total := meta["total"].(map[string]any)
+	if total["cost_units"] != "USD" {
+		t.Errorf("expected cost_units=USD, got %v", total["cost_units"])
+	}
+	costBlock := total["cost"].(map[string]any)
+	costTotal := costBlock["total"].(map[string]any)
+	if costTotal["value"].(float64) <= 0 {
+		t.Error("expected positive total cost")
+	}
+
+	data := result["data"].([]any)
+	if len(data) < 2 {
+		t.Errorf("expected at least 2 tenant groups, got %d", len(data))
+	}
+}
+
+func TestCostReport_DailyResolution(t *testing.T) {
+	seedCostEntries(t)
+	resp, err := http.Get(testServer.URL + "/api/v1/reports/costs?resolution=daily&group_by=tenant")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	meta := result["meta"].(map[string]any)
+	if meta["resolution"] != "daily" {
+		t.Errorf("expected resolution=daily, got %v", meta["resolution"])
+	}
+
+	data := result["data"].([]any)
+	for _, d := range data {
+		row := d.(map[string]any)
+		if row["date"] == nil || row["date"] == "" {
+			t.Error("daily resolution rows must have date field")
+		}
+	}
+}
+
+func TestCostReport_FromToParams(t *testing.T) {
+	seedCostEntries(t)
+	from := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	to := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	resp, err := http.Get(testServer.URL + "/api/v1/reports/costs?from=" + from + "&to=" + to + "&group_by=tenant")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	meta := result["meta"].(map[string]any)
+	period := meta["period"].(string)
+	if !strings.Contains(period, "/") {
+		t.Errorf("expected period with / separator, got %q", period)
+	}
+}
+
+func TestCostReport_CSV(t *testing.T) {
+	seedCostEntries(t)
+	resp, err := http.Get(testServer.URL + "/api/v1/reports/costs?format=csv&group_by=tenant")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if ct := resp.Header.Get("Content-Type"); ct != "text/csv" {
+		t.Errorf("expected text/csv, got %q", ct)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if len(lines) < 2 {
+		t.Errorf("expected header + data rows, got %d lines", len(lines))
+	}
+	if !strings.HasPrefix(lines[0], "group,") {
+		t.Errorf("unexpected CSV header: %s", lines[0])
+	}
+}
+
+func TestCostBreakdown(t *testing.T) {
+	seedCostEntries(t)
+	resp, err := http.Get(testServer.URL + "/api/v1/reports/breakdown?limit=10")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	meta := result["meta"].(map[string]any)
+	count := int(meta["count"].(float64))
+	if count < 2 {
+		t.Errorf("expected at least 2 breakdown rows, got %d", count)
+	}
+
+	data := result["data"].([]any)
+	row := data[0].(map[string]any)
+	for _, field := range []string{"date", "tenant_id", "resource_type", "resource_id", "meter_name", "metered_value", "cost_amount", "cost_type", "currency"} {
+		if row[field] == nil {
+			t.Errorf("breakdown row missing field %q", field)
+		}
+	}
+}
+
+func TestCostBreakdown_CSV(t *testing.T) {
+	seedCostEntries(t)
+	resp, err := http.Get(testServer.URL + "/api/v1/reports/breakdown?format=csv&limit=10")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if ct := resp.Header.Get("Content-Type"); ct != "text/csv" {
+		t.Errorf("expected text/csv, got %q", ct)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if len(lines) < 2 {
+		t.Errorf("expected header + data, got %d lines", len(lines))
+	}
+	if !strings.HasPrefix(lines[0], "date,") {
+		t.Errorf("unexpected CSV header: %s", lines[0])
 	}
 }
 
