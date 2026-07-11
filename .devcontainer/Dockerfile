@@ -22,3 +22,6 @@ RUN curl -sL "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k
 
 # Python deps for OSAC auth token generation (same as CI)
 RUN pip3 install --break-system-packages PyJWT cryptography
+
+# Custom welcome message
+COPY .devcontainer/first-run-notice.txt /usr/local/etc/vscode-dev-containers/first-run-notice.txt
