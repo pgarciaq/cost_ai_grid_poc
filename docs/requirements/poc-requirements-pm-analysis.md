@@ -19,6 +19,8 @@
 > are intentionally excluded — see the overview doc for those.
 >
 > **Last updated:** Jul 14, 2026.
+>
+> **Acceptance criteria key:** ✅ met today &nbsp;·&nbsp; ⚠️ partially met / met with a caveat worth knowing about &nbsp;·&nbsp; ❌ not met yet
 
 ---
 
@@ -32,9 +34,9 @@
 | 4 | REQ-1b | CRITICAL | Heartbeat event ingestion | Done | Satisfied via a local 60s sweep, not an actual OSAC-emitted heartbeat event — functionally equivalent, mechanically different |
 | 5 | REQ-2 | CRITICAL | Near-real-time cost calculation | Done | No known gaps |
 | 6 | REQ-1a | HIGH | Cluster lifecycle via cluster orders | Done | No known gaps |
-| 7 | REQ-3a | HIGH | Tenant/project attribution | Done | RBAC model (Insights RBAC vs. simpler tenant/project auth) still undecided |
+| 7 | REQ-3a | HIGH | Tenant/project attribution | Partial | Cost attribution works, but project-level quotas with roll-up to tenant (required by its own AC) aren't built — only tenant-level quotas exist; RBAC model also still undecided |
 | 8 | REQ-3 | HIGH | Granular cost tracking | Partial | Filter/drill-down by project and by user not yet built; user dimension is blocked on an unresolved PII question |
-| 9 | REQ-9 | HIGH | Quota/budget status API | Done | Grace-period behavior not yet verified against AI Grid requirements |
+| 9 | REQ-9 | HIGH | Quota/budget status API | Partial | Tenant-level API works, but project-level quotas with roll-up to tenant (required by its own AC) aren't implemented; grace periods also unverified |
 | 10 | REQ-10 | HIGH → Parked | Threshold notification back-channel | Done (pull) | Push/webhook notifications parked — OSAC has no receiver to act on them yet |
 | 11 | REQ-13 | HIGH | Custom metrics / custom rates | Done | Only supports "creative math" on existing metrics today; a real backchannel to ask OSAC for brand-new meters doesn't exist |
 | 12 | REQ-2a | HIGH | MaaS CloudEvents & token metering | Done (emulated) | Real OSAC/RHOAI MaaS events don't exist yet; we're validated against an IPP plugin + echo LLM, not production inference traffic |
@@ -45,7 +47,7 @@
 | 17 | REQ-12 | LOW | Daily OpenShift Virtualization costs | TBD | Requirement itself isn't fully defined yet — pending PM confirmation |
 | 18 | REQ-8 | HIGH → Parked | Bare metal costing | Done (ahead of schedule) | Built already, but deprioritized/parked for the Jul 31 PoC scope; real-time events blocked on an OSAC gRPC stream gap |
 
-**At a glance:** 10 of 18 are cleanly Done, 4 are Partial, 3 are Done-with-caveats worth a closer look (POC-ARCH, REQ-1b, REQ-2a), and 1 (REQ-12) is not yet well-defined enough to build against. Two requirements (REQ-10, REQ-8) were explicitly deprioritized/parked by joint decision, independent of our own readiness.
+**At a glance:** 6 of 18 are cleanly Done, 6 are Partial, 3 are Done-with-caveats worth a closer look (POC-ARCH, REQ-1b, REQ-2a), and 1 (REQ-12) is not yet well-defined enough to build against. Two requirements (REQ-10, REQ-8) were explicitly deprioritized/parked by joint decision, independent of our own readiness. Two of the Partial items — REQ-3a and REQ-9 — share the same underlying gap, confirmed in code while adding the acceptance-criteria checkmarks below: quota/budget tracking is tenant-level only today, even though both requirements' own acceptance criteria call for project-level quotas that roll up to the tenant limit.
 
 ---
 
@@ -57,9 +59,9 @@
 Demonstrate Cost Management running on-premise, driven by OSAC heartbeat events, tuned for a demo rather than feature completeness.
 
 **Acceptance Criteria**
-- Cost Management deployed on-premise in a single cluster
-- Tuned for performance, not feature completeness
-- Can demonstrate end-to-end flow: consumption → event → ingestion → cost report
+- ⚠️ Cost Management deployed on-premise in a single cluster *(demo-grade via CRC; not yet a production-packaged deployment)*
+- ✅ Tuned for performance, not feature completeness
+- ✅ Can demonstrate end-to-end flow: consumption → event → ingestion → cost report
 
 **Current Implementation Status**
 - CRC (CodeReady Containers) deployment is documented and tested: [deployment checklist](../dev/crc-deployment-checklist.md), [full stack guide](../dev/crc-full-deployment.md), [OSAC-on-CRC guide](../dev/crc-osac-deployment.md), [dev setup guide](../dev/crc-dev-setup.md)
@@ -80,17 +82,19 @@ The demo-capable path (CRC) is done. The production packaging path (Helm/OLM) is
 Charge based on what was provisioned (VM size, cluster config) and for how long — no metric scraping, no CSV pipeline rework. A standalone new data path driven by OSAC heartbeat events.
 
 **Acceptance Criteria**
-- Costs calculated from provisioned capacity (instance type, duration)
-- Heartbeat events from OSAC drive cost calculation
-- No dependency on workload cluster metrics
-- Existing SQL queries adapted to support capacity-based model
-- Demo-ready: show cost for a provisioned cluster/VM within SLA
+- ⚠️ Costs calculated from provisioned capacity (instance type, duration) *(works today; two of three VM meters are at risk — see below)*
+- ✅ Heartbeat events from OSAC drive cost calculation
+- ✅ No dependency on workload cluster metrics
+- ✅ Existing SQL queries adapted to support capacity-based model
+- ✅ Demo-ready: show cost for a provisioned cluster/VM within SLA
 
 **Current Implementation Status**
 - Standalone Go component (`inventory-watcher`) built specifically for this data path
 - Cost calculated from provisioned capacity via `internal/metering/metering.go` (`computeInstanceMeters`, `clusterMeters`)
 - Driven by the Watch stream + 60-second metering sweep, not workload-cluster metrics ([ADR-001](../decisions/001-metering-sweep-interval.md))
 - Meets the SLA comfortably: under 1ms per event, cost entries produced within 30 seconds
+
+*July 14, 2006 meeting: OSAC removes cores/memory_gib from ComputeInstance*
 - **At risk:** `computeInstanceMeters` derives two of its three VM meters — `vm_cpu_core_seconds` and `vm_memory_gib_seconds` — directly from `inst.Cores` and `inst.MemoryGiB` on the OSAC `ComputeInstance` record ([`metering.go:434-473`](../../inventory-watcher/internal/metering/metering.go)). Only the third meter, `vm_uptime_seconds`, is independent of those fields
 
 **Gap Summary**
@@ -108,11 +112,11 @@ The pipeline itself has no gaps, but one of its underlying assumptions is about 
 Connect to the OSAC Region Management Cluster (gRPC/REST) to read inventory, resource state, and the tenant/project hierarchy — not individual workload clusters.
 
 **Acceptance Criteria**
-- Connects to OSAC Region Management Cluster APIs (gRPC/REST)
-- Can read inventory and resource state from OSAC
-- Account/tenant lifecycle synced between OSAC and RHCM; tenant/metering/cost data is never deleted just because a tenant stops sending data or is deleted in OSAC — deletion only happens via a configurable retention policy
-- Workload-level info includes OSAC tenant ID, project ID, resource ID
-- Integration does not degrade the orchestrator's UX
+- ✅ Connects to OSAC Region Management Cluster APIs (gRPC/REST)
+- ✅ Can read inventory and resource state from OSAC
+- ✅ Account/tenant lifecycle synced between OSAC and RHCM; tenant/metering/cost data is never deleted just because a tenant stops sending data or is deleted in OSAC — deletion only happens via a configurable retention policy
+- ✅ Workload-level info includes OSAC tenant ID, project ID, resource ID
+- ✅ Integration does not degrade the orchestrator's UX
 
 **Current Implementation Status**
 - Connected via gRPC Watch stream + REST List endpoints ([`internal/osac/client.go`](../../inventory-watcher/internal/osac/client.go))
@@ -135,10 +139,10 @@ No functional gaps for PoC scope. The only deferred item (CloudEvents-standard e
 Receive periodic heartbeat events from OSAC at configurable intervals (10-30s), auto-registering tenants on first contact.
 
 **Acceptance Criteria**
-- Can receive periodic lifecycle CloudEvents via HTTP or Kafka
-- Events parsed for tenant ID, project ID, resource ID, hardware config, duration
-- First event auto-creates the tenant/project if not already registered
-- Events processed and cost calculated within the target SLA
+- ⚠️ Can receive periodic lifecycle CloudEvents via HTTP or Kafka *(satisfied via a local sweep instead — see caveat below)*
+- ✅ Events parsed for tenant ID, project ID, resource ID, hardware config, duration
+- ✅ First event auto-creates the tenant/project if not already registered
+- ✅ Events processed and cost calculated within the target SLA
 
 **Current Implementation Status**
 - Functionally satisfied today via a **local 60-second sweep** rather than an actual heartbeat CloudEvent emitted by OSAC's metering collector — see [ADR-003](../decisions/003-heartbeat-emitter-vs-sweep.md) for the full rationale
@@ -162,10 +166,10 @@ The letter of the requirement ("receive heartbeat events") isn't literally true 
 Process OSAC heartbeat events and calculate costs within 60 seconds of receipt; 90-second end-to-end SLA (OSAC send + our processing).
 
 **Acceptance Criteria**
-- Processes OSAC heartbeat events within 60 seconds of receipt
-- End-to-end latency under 90 seconds
-- Cost report available in the dashboard after processing
-- Demonstrated with at least one workload type
+- ✅ Processes OSAC heartbeat events within 60 seconds of receipt
+- ✅ End-to-end latency under 90 seconds
+- ✅ Cost report available in the dashboard after processing
+- ✅ Demonstrated with at least one workload type
 
 **Current Implementation Status**
 - Under 1ms per event to process; metering sweep every 60s, rating sweep every 30s — comfortably inside the 90s SLA
@@ -188,11 +192,11 @@ None outstanding.
 Monitor OSAC "cluster orders" for state changes and calculate cost from provisioned capacity and duration.
 
 **Acceptance Criteria**
-- Monitors cluster orders via the OSAC management layer
-- Captures state changes (create, stop, start, destroy)
-- Cluster rate set per cluster order
-- Cost calculated from provisioned capacity and duration
-- No dependency on internal workload cluster data
+- ✅ Monitors cluster orders via the OSAC management layer
+- ✅ Captures state changes (create, stop, start, destroy)
+- ✅ Cluster rate set per cluster order
+- ✅ Cost calculated from provisioned capacity and duration
+- ✅ No dependency on internal workload cluster data
 
 **Current Implementation Status**
 - Clarified and confirmed: "ClusterOrder" is OSAC's purchase/ordering workflow; the resulting **Cluster** is the actual provisioned resource that incurs cost — we track the Cluster ([resolved open question](osac-open-questions.md#cluster-lifecycle-req-1a))
@@ -208,25 +212,27 @@ None outstanding.
 ---
 
 ### 7. REQ-3a — OSAC Tenant/Project Attribution
-**Status: Done** &nbsp;·&nbsp; [COST-7799](https://redhat.atlassian.net/browse/COST-7799)
+**Status: Partial** &nbsp;·&nbsp; [COST-7799](https://redhat.atlassian.net/browse/COST-7799)
 
 Map OSAC's Tenant → Project hierarchy into RHCM so all costs attribute correctly, including quota/budget rollup from project to tenant.
 
 **Acceptance Criteria**
-- Cost data attributed to the correct OSAC tenant
-- Cost data drillable to project level within a tenant
-- Tenant/project hierarchy read from OSAC
-- Multi-tenant attribution works even on shared infrastructure
-- Quotas/budgets tracked per project and per tenant, with project consumption rolling up and capped by tenant quota (project-level overcommit allowed)
+- ✅ Cost data attributed to the correct OSAC tenant
+- ✅ Cost data drillable to project level within a tenant
+- ✅ Tenant/project hierarchy read from OSAC
+- ✅ Multi-tenant attribution works even on shared infrastructure
+- ❌ Quotas/budgets tracked per project and per tenant, with project consumption rolling up and capped by tenant quota (project-level overcommit allowed)
 
 **Current Implementation Status**
 - `inventory_project` table tracks the OSAC Tenant → Project hierarchy; all metering entries carry `tenant_id`
 - **Decision (Jul 2, 2026):** RBAC scope for PoC is tenant + project level only; fine-grained Insights RBAC deferred post-PoC
+- **Gap confirmed in code:** the `quotas` table already has a `project_id` column, but `QuotasForTenant` (the query behind the quota API — [`store.go:1218`](../../inventory-watcher/internal/inventory/store.go)) filters by `tenant_id` only and ignores it. Quota tracking today is tenant-level exclusively; no project-level rows or roll-up logic exist
 
 **Gap Summary**
-Attribution itself is solid. What's still open is governance, not data: who can see whose cost data, and under which RBAC model.
+Cost attribution itself (tenant + project drill-down) is solid. What's not built yet is the quota/budget half of this requirement: project-level quotas that roll up to the tenant limit. The column is there; the query logic isn't. This is the same underlying gap called out under REQ-9 below — they're two acceptance criteria pointing at one missing piece of work. Separately, governance (who can see whose cost data, under which RBAC model) is also still open.
 
 **Action Items / Open Questions**
+- **New:** build project-scoped quota records and roll-up-to-tenant aggregation — see the matching gap under REQ-9
 - Will providers view cost in the Cost Management UI or in OSAC's UI? (See "Provider UI surface" in Cross-Cutting Unresolved Items below)
 - Is RBAC needed for providers viewing cross-project cost data? Final decision on Insights RBAC vs. a simpler Keycloak-native tenant/project model is still open ([open question #18](osac-open-questions.md#tenantproject-attribution-req-3a))
 - Consolidated action items: implement OSAC project entities in Cost Management (done); determine RBAC needs for cross-project visibility (open)
@@ -239,10 +245,10 @@ Attribution itself is solid. What's still open is governance, not data: who can 
 A single system of record for cost, drillable by tenant, project, model, and user, spanning both capacity-based and consumption-based dimensions.
 
 **Acceptance Criteria**
-- Cost data filterable by tenant, model/SKU, application, user
-- Dashboard shows near-real-time token consumption, compute hours, and estimated costs
-- Reporting supports CSV and JSON export
-- Financial data decoupled from infrastructure state
+- ⚠️ Cost data filterable by tenant, model/SKU, application, user *(tenant and model/SKU done; application and user are not — see below)*
+- ✅ Dashboard shows near-real-time token consumption, compute hours, and estimated costs
+- ✅ Reporting supports CSV and JSON export
+- ✅ Financial data decoupled from infrastructure state
 
 **Current Implementation Status**
 - Filterable by tenant (`?group_by=tenant&tenant_id=X`) and by resource/model (`?group_by=resource`) — **Done**
@@ -260,31 +266,33 @@ Two of four requested drill-down dimensions (project, user) aren't wired up yet.
 ---
 
 ### 9. REQ-9 — Quota/Budget Status API
-**Status: Done** &nbsp;·&nbsp; [COST-7801](https://redhat.atlassian.net/browse/COST-7801)
+**Status: Partial** &nbsp;·&nbsp; [COST-7801](https://redhat.atlassian.net/browse/COST-7801)
 
 Give OSAC a way to check quota/budget status before allowing resource creation. Enforcement stays with OSAC; we provide the data.
 
 **Acceptance Criteria**
-- Sub-second API latency
-- OSAC can query: is tenant within quota? what % of budget is consumed?
-- Threshold checks at 50%, 70%, 90%, 100%
-- Source of truth for quota data agreed between OSAC and RHCM
-- Grace period requirements verified
-- We implement the quota concept regardless of whether OSAC also does
-- Quotas/budgets scoped to tenants and projects, rolling up from project to tenant
+- ✅ Sub-second API latency
+- ✅ OSAC can query: is tenant within quota? what % of budget is consumed?
+- ✅ Threshold checks at 50%, 70%, 90%, 100%
+- ✅ Source of truth for quota data agreed between OSAC and RHCM
+- ❌ Grace period requirements verified
+- ✅ We implement the quota concept regardless of whether OSAC also does
+- ❌ Quotas/budgets scoped to tenants and projects, rolling up from project to tenant
 
 **Current Implementation Status**
 - `GET /api/v1/quotas/{tenant_id}` implemented, sub-second via a single indexed SUM query
 - Threshold flags (50/70/90/100%) included in the response
 - **Decision:** OSAC owns and defines limits (source of truth); Cost caches limits and owns metering, consumption aggregation, and threshold evaluation
+- **Gap confirmed in code:** `QuotasForTenant` and `MeteringSum` ([`store.go:1218, 1245`](../../inventory-watcher/internal/inventory/store.go)) both query by `tenant_id` only. Quota status is computed and returned at the tenant level exclusively — there is no project-level quota record or roll-up-to-tenant aggregation today, even though the `quotas` table has a `project_id` column ready for it
 
 **Gap Summary**
-The API itself is done and meets its latency target. The one unverified item is grace periods — whether hitting 100% means immediate cutoff or there's a tolerance window — which hasn't been confirmed against actual AI Grid requirements.
+The tenant-level API is done and meets its latency target — that part is genuinely solid. Two acceptance criteria are unmet: grace periods are unverified, and more substantively, project-level quotas with roll-up to the tenant limit don't exist yet — only tenant-level quotas do. This is the same gap called out under REQ-3a; fixing it once (project-scoped quota rows + an aggregation query) satisfies both requirements.
 
 **Action Items / Open Questions**
+- **New:** implement project-level quota records and roll-up-to-tenant aggregation (sum of project consumption capped by the tenant limit, with project-level overcommit allowed per the spec) — see REQ-3a for the matching acceptance criterion
 - Do AI Grid requirements include grace periods? Still unverified
 - **Budget vs. usage quotas need different mechanisms (Jul 14, 2026 meeting, Ronnie):** usage quotas (VM count, storage) need this synchronous pull-based check since OSAC can't risk duplicated state from an eventually-consistent notification; budget (monetary) quotas are more tolerant of eventual consistency, so a push model (REQ-10) is also viable there — the two aren't fully interchangeable
-- Consolidated action items: calculate quota/budget consumption (done); expose the quota status API (done); investigate/implement the quota/budget concept generally (done); verify grace period requirements (open)
+- Consolidated action items: calculate quota/budget consumption (done at tenant level); expose the quota status API (done); investigate/implement the quota/budget concept generally (done); verify grace period requirements (open)
 
 ---
 
@@ -294,10 +302,11 @@ The API itself is done and meets its latency target. The one unverified item is 
 Proactively notify OSAC when cost/quota consumption crosses defined thresholds, so OSAC can trigger OPA-enforced rate limiting.
 
 **Acceptance Criteria**
-- Sends notifications to OSAC at thresholds configurable by OSAC administrators (implying threshold sync too)
-- Notifications include tenant ID, resource/project context, threshold level, current consumption
-- Transport mechanism agreed between OSAC and RHCM
-- Reliable delivery (no silent drops)
+*(all four criteria below describe the push/webhook mechanism specifically — none are built, by joint decision; the pull model that satisfies REQ-9 instead is a different mechanism, not a substitute for these)*
+- ❌ Sends notifications to OSAC at thresholds configurable by OSAC administrators (implying threshold sync too)
+- ❌ Notifications include tenant ID, resource/project context, threshold level, current consumption
+- ❌ Transport mechanism agreed between OSAC and RHCM
+- ❌ Reliable delivery (no silent drops)
 
 **Current Implementation Status**
 - **Pull model implemented:** `GET /api/v1/quotas/{tenant_id}` returns threshold flags — this is the mechanism actually in use for the PoC
@@ -320,9 +329,9 @@ Proactively notify OSAC when cost/quota consumption crosses defined thresholds, 
 Let a rate be defined from an arbitrary metric dimension emitted by OSAC CloudEvents, without hardcoding new dimensions into the codebase.
 
 **Acceptance Criteria**
-- Can consume arbitrary CloudEvent dimensions as rate inputs
-- New dimensions configurable with an ID, classification, and rate name
-- Custom dimension data stored and available for cost calculation and reporting
+- ✅ Can consume arbitrary CloudEvent dimensions as rate inputs
+- ✅ New dimensions configurable with an ID, classification, and rate name
+- ✅ Custom dimension data stored and available for cost calculation and reporting
 
 **Current Implementation Status**
 - Config-driven extraction implemented in [`internal/custommetrics/custommetrics.go`](../../inventory-watcher/internal/custommetrics/custommetrics.go); new dimensions configured via a JSON file (`CUSTOM_METRICS_CONFIG` env var), no recompile needed
@@ -345,15 +354,15 @@ Solid for what it was scoped to do: composing new rates from metrics OSAC *alrea
 Consume CloudEvents from OpenShift AI/OSAC for MaaS token metering (input, output, inference tokens, requests) and compute consumption-based cost within 60 seconds.
 
 **Acceptance Criteria**
-- Can receive and process MaaS CloudEvents from OpenShift AI/OSAC
-- Events ingested within 30 seconds of emission
-- CloudEvents format parsed and stored
-- MaaS cost computed within 60 seconds of event receipt, feeding quota/budget updates (REQ-9)
-- Validated with at least one MaaS workload type
-- Ingests `prompt_tokens`, `completion_tokens`, `cached_tokens` from vLLM/OSAC MaaS CloudEvents
-- Tracks hardware compute: GPU SKU, VRAM (GB-seconds), queue wait
-- Token data available for cost calculation and visible in the dashboard
-- MaaS rate structure defined (tokens in/out, inference tokens, requests), priced per million units
+- ⚠️ Can receive and process MaaS CloudEvents from OpenShift AI/OSAC *(pipeline works; real OSAC/RHOAI events don't exist yet, so this runs on mock/simulated events)*
+- ✅ Events ingested within 30 seconds of emission
+- ✅ CloudEvents format parsed and stored
+- ✅ MaaS cost computed within 60 seconds of event receipt, feeding quota/budget updates (REQ-9)
+- ⚠️ Validated with at least one MaaS workload type *(validated against the IPP plugin + an echo-mode LLM, not a real model)*
+- ✅ Ingests `prompt_tokens`, `completion_tokens`, `cached_tokens` from vLLM/OSAC MaaS CloudEvents *(implemented as 4 meters — `maas_tokens_in`, `maas_tokens_out`, `maas_tokens_cached`, `maas_tokens_reasoning` — actually ahead of this criterion)*
+- ⚠️ Tracks hardware compute: GPU SKU, VRAM (GB-seconds), queue wait *(GPU VRAM/compute-seconds are demoable via the REQ-13 custom-metrics config (`deploy/custom-metrics-example.json`); there's no dedicated GPU SKU classification or queue-wait meter)*
+- ✅ Token data available for cost calculation and visible in the dashboard
+- ✅ MaaS rate structure defined (tokens in/out, inference tokens, requests), priced per million units
 
 **Current Implementation Status**
 - Ingest endpoint (`POST /api/v1/events`) processes MaaS CloudEvents end-to-end; under 1ms per event; sustained throughput tested at 850-1,700 events/s ([stress test](../dev/ipp-stress-test-2026-07-05.md))
@@ -382,10 +391,10 @@ The pipeline, IPP plugin integration, and rate engine are genuinely proven. What
 Read OSAC's service catalog for pricing; manual setup is acceptable for PoC, API sync deferred.
 
 **Acceptance Criteria**
-- Adds service catalog capability
-- Can read and synchronize OSAC catalog items (instance types, cluster sizes, storage tiers, etc.)
-- Price lists correspond to OSAC catalog offerings
-- Cost calculations use catalog-item-based rates (priced per catalog item, not as a raw function of the rates that constitute it — e.g. a 4-vCPU/16GiB VM might legitimately cost 3x a 2-vCPU/8GiB VM, not exactly 2x)
+- ✅ Adds service catalog capability
+- ✅ Can read and synchronize OSAC catalog items (instance types, cluster sizes, storage tiers, etc.)
+- ✅ Price lists correspond to OSAC catalog offerings
+- ⚠️ Cost calculations use catalog-item-based rates *(the pricing model is correct, but rates are manually seeded rather than derived from catalog pricing; also see the `ComputeInstance` CPU/memory removal risk below, shared with POC-ARCH)*
 
 **Current Implementation Status**
 - Catalog items synced via the reconciler for all three types: cluster, compute_instance, bare_metal_instance, each linked to a hardware-profile template
@@ -407,9 +416,9 @@ Sync works, and the catalog-item-based pricing model is correctly in place. What
 Export chargeback reports covering both capacity-based and consumption-based dimensions, per tenant/project.
 
 **Acceptance Criteria**
-- Reports map provisioned compute hours and GPU hours to token consumption per tenant/project
-- Exportable in CSV and JSON
-- Accurate and consistent with the cost tracking dashboard
+- ⚠️ Reports map provisioned compute hours and GPU hours to token consumption per tenant/project *(tenant-level works; project-level grouping is missing — same schema gap as REQ-3)*
+- ✅ Exportable in CSV and JSON
+- ✅ Accurate and consistent with the cost tracking dashboard
 
 **Current Implementation Status**
 - `GET /api/v1/reports/costs?group_by=tenant` covers both capacity and consumption cost types; CSV and JSON export both work; JSON uses a Koku-compatible `meta`/`data` structure with Infrastructure/Supplementary split
@@ -432,9 +441,9 @@ On-demand reporting works well. Two things are missing: reports can't be grouped
 Zero-leakage reconciliation, immutable audit logs, and support for billing dispute resolution.
 
 **Acceptance Criteria**
-- Billing ledgers match consumption logs with zero financial variance
-- Tamper-resistant audit trail for admin changes
-- Human-readable error logging for dispute resolution
+- ✅ Billing ledgers match consumption logs with zero financial variance
+- ✅ Tamper-resistant audit trail for admin changes
+- ✅ Human-readable error logging for dispute resolution
 
 **Current Implementation Status**
 - `raw_events` table stores every incoming event immutably before any processing, deduplicated on event ID — this is the audit trail
@@ -456,10 +465,10 @@ None outstanding for PoC scope.
 Tiered pricing for both capacity-based and MaaS consumption-based rates (e.g., first 1M tokens free, next 10M at $0.50/M; first 20 GiB free, next 100 GiB at $0.08/GiB-month).
 
 **Acceptance Criteria**
-- Rate engine supports multiple pricing tiers per resource type
-- Tiers apply to both capacity-based rates (cluster/VM) and MaaS consumption rates
-- Tier configuration is manageable without code changes
-- We implement cost tiers regardless of whether OSAC also implements them; source-of-truth decided at implementation time
+- ✅ Rate engine supports multiple pricing tiers per resource type
+- ❌ Tiers apply to both capacity-based rates (cluster/VM) and MaaS consumption rates *(correct for MaaS; would silently undercharge if applied to capacity meters today — see below)*
+- ✅ Tier configuration is manageable without code changes
+- ✅ We implement cost tiers regardless of whether OSAC also implements them; source-of-truth decided at implementation time
 
 **Current Implementation Status**
 - Tiered pricing engine implemented and correct for **MaaS** rates: graduated ("waterfall") pricing, unbounded final tier, free tiers, all stored as configurable JSON — no code changes needed to add a new tier structure
@@ -482,7 +491,7 @@ This is not a "not started" gap — it's a "would produce incorrect billing if u
 Daily cost calculation for OpenShift Virtualization workloads (VMs) provisioned through OSAC.
 
 **Acceptance Criteria**
-- Daily (or even hourly) cost for every resource type (CaaS, VMaaS, etc.) is highly desirable — not yet a hard requirement, but described as "just a matter of time"
+- ❌ Daily (or even hourly) cost for every resource type (CaaS, VMaaS, etc.) is highly desirable — not yet a hard requirement, but described as "just a matter of time"
 
 **Current Implementation Status**
 - Not started. This overlaps with the broader [PRD-13 OpenShift Virtualization fit & finish](https://github.com/project-koku/enhancements/pull/11) epic, which is a larger, pre-existing body of work outside this PoC's boundaries
@@ -506,9 +515,9 @@ Support bare metal nodes provisioned through OSAC (BMaaS), consuming bare metal 
 > **Decision (Jul 2, 2026):** Deferred from the Jul 31 PoC scope. Owner: Moti.
 
 **Acceptance Criteria**
-- Receives and processes bare metal service CloudEvents from OSAC
-- Costs calculated for bare metal nodes based on provisioned capacity
-- Standalone bare metal nodes (not attached to OpenShift) supported if required by AI Grid
+- ⚠️ Receives and processes bare metal service CloudEvents from OSAC *(via REST reconciler polling, not real-time Watch-stream events — OSAC gap, not ours)*
+- ✅ Costs calculated for bare metal nodes based on provisioned capacity *(uptime-based; cores/memory not yet meterable — see below)*
+- ⚠️ Standalone bare metal nodes (not attached to OpenShift) supported if required by AI Grid *(mechanism is likely agnostic to this, but not explicitly verified — whether it's even required is still an open question)*
 
 **Current Implementation Status**
 - Despite being parked, this was actually built: `inventory_bare_metal_instance` table, reconciler-based polling of OSAC's REST List API, uptime metering (`bm_uptime_seconds`) via the sweep + a final metering entry on delete, default rates seeded
@@ -536,7 +545,7 @@ A handful of open decisions touch multiple requirements above and are the ones m
 | **Provider UI surface** — Cost Management UI vs. OSAC-hosted UI vs. a generic backend-agnostic abstraction layer | REQ-3a, REQ-9 | Unresolved; Moti/Pau raised needing an abstraction layer for metering, catalog, *and* UI, not just data — unclear if feasible by Jul 31/Aug 31 |
 | **MaaS metric collection ownership** — Cost collects directly from RHOAI, or OSAC collects and forwards | REQ-2a | Leaning toward OSAC forwarding long-term, but PoC builds the direct path as fallback; Moti's design not confirmed to land by Jul 31 |
 | **Per-user PII exposure** — does per-user MaaS cost attribution expose sensitive personal data | REQ-3 | Not resolved; action item with Pau, no timeline given |
-| **MaaS rate/tier spec** — the actual rules for MaaS quotas, budgets, tiers, and combining metrics | REQ-2a, REQ-11 | Owned by Pau, carried over multiple weeks, still not delivered as of Jul 14 |
+| **MaaS rate/tier spec** — the actual rules for MaaS quotas, budgets, tiers, and combining metrics | REQ-2a, REQ-11 | Owned by Pau, carried over |
 | **RBAC model** — Insights RBAC vs. a simpler Keycloak-native tenant/project model | REQ-3a | Unresolved; deferred post-PoC provided project-within-tenant concept lands |
 | **Three-way convergence** — SaaS Cost Management, on-prem Koku, and this OSAC PoC can't stay separate long-term | Cuts across most requirements | EMR meeting expected to set direction; outcome affects RBAC approach and long-term architecture |
 | **Catalog price override by tenant** — can tenants override CSP prices or create their own priced sub-offerings | REQ-3b, REQ-13 | Raised by Moti, no answer from OSAC yet |
