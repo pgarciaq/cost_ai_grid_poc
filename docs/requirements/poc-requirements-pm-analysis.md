@@ -134,7 +134,7 @@ No functional gaps for PoC scope. The only deferred item (CloudEvents-standard e
 ---
 
 ### 4. REQ-1b — OSAC Heartbeat Event Ingestion
-**Status: Done** (with a mechanical caveat worth PM awareness)
+**Status: Done** &nbsp;·&nbsp; [COST-7795](https://redhat.atlassian.net/browse/COST-7795) &nbsp;·&nbsp; (with a mechanical caveat worth PM awareness)
 
 Receive periodic heartbeat events from OSAC at configurable intervals (10-30s), auto-registering tenants on first contact.
 
