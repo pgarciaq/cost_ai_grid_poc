@@ -405,5 +405,4 @@ See also: [`snippets/query-costs.sh`](../snippets/query-costs.sh) for demo queri
 | [Demo Scenario 1](demos/demo-scenario-1.md) | Infrastructure metering demo |
 | [Demo Scenario 2](demos/demo-scenario-2-maas.md) | MaaS metering + cost demo |
 | [Local Dev Setup](dev/local-dev-setup.md) | How to run everything |
-| [Codespaces Setup](.devcontainer/devcontainer.json) | GitHub Codespaces devcontainer with k3d (PR #48) |
-| [PoC Gap Closure Plan](plans/poc-gap-closure-plan.md) | Remaining gaps and execution plan for Jul 31 demo |
+| [Codespaces Setup](../.devcontainer/devcontainer.json) | GitHub Codespaces devcontainer with k3d (PR #48) |
