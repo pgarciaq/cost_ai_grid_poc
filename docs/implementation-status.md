@@ -11,10 +11,10 @@
 | Priority | Total | Done | Partial | TBD |
 |---|---|---|---|---|
 | CRITICAL | 5 | 4 | 1 | 0 |
-| HIGH | 8 | 7 | 1 | 0 |
+| HIGH | 8 | 8 | 0 | 0 |
 | MEDIUM | 3 | 3 | 0 | 0 |
 | LOW | 2 | 0 | 1 | 1 |
-| **Total** | **18** | **14** | **3** | **1** |
+| **Total** | **18** | **15** | **2** | **1** |
 
 ## Full Requirements Status
 
@@ -27,7 +27,7 @@
 | 5 | REQ-2 | [COST-7796](https://redhat.atlassian.net/browse/COST-7796) | CRITICAL | Real-time cost calc | **Done** | <1ms/event, cost within 30s |
 | 6 | REQ-1a | [COST-7794](https://redhat.atlassian.net/browse/COST-7794) | HIGH | Cluster lifecycle | **Done** | ClusterOrder is the ordering workflow; we track the resulting Cluster (verified) |
 | 7 | REQ-3a | [COST-7799](https://redhat.atlassian.net/browse/COST-7799) | HIGH | Tenant/project attribution | **Done** | Authz/RBAC open |
-| 8 | REQ-3 | [COST-7798](https://redhat.atlassian.net/browse/COST-7798) | HIGH | Granular cost tracking | Partial | Report API done with project dimension, breakdown, daily resolution; user dimension missing |
+| 8 | REQ-3 | [COST-7798](https://redhat.atlassian.net/browse/COST-7798) | HIGH | Granular cost tracking | **Done** | Report API with tenant/project/user/resource dimensions, breakdown, daily resolution |
 | 9 | REQ-9 | [COST-7801](https://redhat.atlassian.net/browse/COST-7801) | HIGH | Quota/budget status API | **Done** | `GET /api/v1/quotas/{tenant_id}` |
 | 10 | REQ-10 | [COST-7807](https://redhat.atlassian.net/browse/COST-7807) | HIGH | Threshold notifications | **Done** (pull) | Webhook push deferred |
 | 11 | REQ-13 | [COST-7810](https://redhat.atlassian.net/browse/COST-7810) | HIGH | Custom rate dimensions | **Done** | [Design](research/req13-custom-metrics-design.md) |
@@ -147,7 +147,7 @@ is a separate concern owned by the RHCM team.
 ---
 
 ### REQ-3 — Granular Cost Tracking
-**Status:** Partial
+**Status:** Done
 **Spec:** [poc_requirements_overview.md#req-3](https://github.com/myersCody/cost_ai_grid_poc/blob/main/docs/requirements/poc_requirements_overview.md#req-3-granular-cost-tracking)
 
 | Acceptance Criterion | Status | Implementation |
@@ -155,7 +155,7 @@ is a separate concern owned by the RHCM team.
 | Cost filterable by tenant | Done | `?group_by=tenant&tenant_id=X` |
 | Cost filterable by model/SKU | Done | `?group_by=resource` shows per-resource costs |
 | Cost filterable by project | Done | `?group_by=project` — `project_id` on metering + cost entries, wired end-to-end (Jul 4) |
-| Cost filterable by user | Gap | No user tracking — IPP events have `user` field but we don't extract it |
+| Cost filterable by user | Done | `?group_by=user` — `user_id` on metering + cost entries (PR #59) |
 | Dashboard with near-real-time consumption | Done | Debug dashboard + Grafana |
 | Reporting supports CSV and JSON export | Done | `?format=csv`; JSON default |
 | Reporting supports date filtering | Done | `?from=YYYY-MM-DD&to=YYYY-MM-DD` params (PR #42) |
@@ -163,9 +163,9 @@ is a separate concern owned by the RHCM team.
 | Per-resource breakdown | Done | `GET /api/v1/reports/breakdown` — per-resource line-item drill-down (PR #42) |
 | Financial data decoupled from infra state | Done | `cost_entries` table independent of inventory |
 
-**Gaps:**
-- **User dimension:** IPP CloudEvents carry a `user` field that we discard during ingestion. Need to store user on metering/cost entries and add `?group_by=user` to reports
-- **Application dimension:** No concept of "application" — may map to OSAC project labels
+**Open items (not PoC-blocking):**
+- **Application dimension:** No concept of "application" in OSAC — may map to project labels; not in acceptance criteria
+- **PII concern:** Pau to confirm whether per-user MaaS attribution needs restriction (open question #21)
 
 ---
 
