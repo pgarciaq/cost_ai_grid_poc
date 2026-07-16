@@ -128,6 +128,7 @@ type MeteringEntry struct {
 	TenantID     string    `json:"tenant_id"`
 	ProjectID    string    `json:"project_id"`
 	UserID       string    `json:"user_id"`
+	InstanceType string    `json:"instance_type"`
 	MeterName    string    `json:"meter_name"`
 	Value        float64   `json:"value"`
 	Unit         string    `json:"unit"`
@@ -144,6 +145,7 @@ type RateRecord struct {
 	ID            int64      `json:"id"`
 	TenantID      *string    `json:"tenant_id"`
 	ResourceType  string     `json:"resource_type"`
+	InstanceType  string     `json:"instance_type"`
 	MeterName     string     `json:"meter_name"`
 	KokuMetric    string     `json:"koku_metric"`
 	CostType      string     `json:"cost_type"`

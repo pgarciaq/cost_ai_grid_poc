@@ -20,7 +20,7 @@ func TestComputeInstanceMeters(t *testing.T) {
 		Cores:      4,
 		MemoryGiB:  16,
 	}
-	entries := computeInstanceMeters(inst, "default", 60.0, t0, t1)
+	entries := computeInstanceMeters(inst, nil, "default", 60.0, t0, t1)
 
 	if len(entries) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(entries))
@@ -66,9 +66,64 @@ func TestComputeInstanceMeters_ZeroCores(t *testing.T) {
 		Cores:      0,
 		MemoryGiB:  8,
 	}
-	entries := computeInstanceMeters(inst, "default", 60.0, t0, t1)
+	entries := computeInstanceMeters(inst, nil, "default", 60.0, t0, t1)
 	if entries[1].Value != 0 {
 		t.Errorf("cpu_core_seconds should be 0 with 0 cores, got %v", entries[1].Value)
+	}
+}
+
+func TestComputeInstanceMeters_CatalogFallback(t *testing.T) {
+	inst := inventory.ComputeInstanceRecord{
+		InstanceID:   "vm-catalog",
+		Tenant:       "t",
+		InstanceType: "m5.xlarge",
+		Cores:        0,
+		MemoryGiB:    0,
+	}
+	catalog := map[string]*inventory.InstanceTypeRecord{
+		"m5.xlarge": {InstanceTypeID: "m5.xlarge", Cores: 4, MemoryGiB: 16},
+	}
+	entries := computeInstanceMeters(inst, catalog, "default", 60.0, t0, t1)
+
+	if entries[1].Value != 4*60.0 {
+		t.Errorf("vm_cpu_core_seconds: expected %v (catalog fallback), got %v", 4*60.0, entries[1].Value)
+	}
+	if entries[2].Value != 16*60.0 {
+		t.Errorf("vm_memory_gib_seconds: expected %v (catalog fallback), got %v", 16*60.0, entries[2].Value)
+	}
+	if entries[0].InstanceType != "m5.xlarge" {
+		t.Errorf("instance_type not propagated: got %q", entries[0].InstanceType)
+	}
+}
+
+func TestComputeInstanceMeters_CatalogMissStaysZero(t *testing.T) {
+	inst := inventory.ComputeInstanceRecord{
+		InstanceID:   "vm-unknown",
+		Tenant:       "t",
+		InstanceType: "unknown.type",
+		Cores:        0,
+		MemoryGiB:    0,
+	}
+	entries := computeInstanceMeters(inst, nil, "default", 60.0, t0, t1)
+
+	if entries[1].Value != 0 {
+		t.Errorf("expected 0 cpu_core_seconds when catalog miss, got %v", entries[1].Value)
+	}
+}
+
+func TestComputeInstanceMeters_InstanceTypePropagated(t *testing.T) {
+	inst := inventory.ComputeInstanceRecord{
+		InstanceID:   "vm-typed",
+		Tenant:       "t",
+		InstanceType: "c5.2xlarge",
+		Cores:        8,
+		MemoryGiB:    32,
+	}
+	entries := computeInstanceMeters(inst, nil, "default", 60.0, t0, t1)
+	for _, e := range entries {
+		if e.InstanceType != "c5.2xlarge" {
+			t.Errorf("%s: instance_type got %q, want c5.2xlarge", e.MeterName, e.InstanceType)
+		}
 	}
 }
 
@@ -252,7 +307,7 @@ func TestMaaSMeters_EmptyUserID(t *testing.T) {
 
 func TestComputeInstanceMeters_PeriodPropagation(t *testing.T) {
 	inst := inventory.ComputeInstanceRecord{InstanceID: "vm", Tenant: "t", Cores: 1, MemoryGiB: 1}
-	entries := computeInstanceMeters(inst, "default", 60.0, t0, t1)
+	entries := computeInstanceMeters(inst, nil, "default", 60.0, t0, t1)
 	for i, e := range entries {
 		if !e.PeriodStart.Equal(t0) || !e.PeriodEnd.Equal(t1) {
 			t.Errorf("[%d] period: got %v-%v, want %v-%v", i, e.PeriodStart, e.PeriodEnd, t0, t1)
