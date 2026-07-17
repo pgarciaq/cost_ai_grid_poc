@@ -1,5 +1,6 @@
-// ERD: Metering, Rating & Quotas
-// Tables that track usage, apply rates, compute cost, and enforce quotas.
+// ERD: Metering, Rating, Cost & Quotas
+// Tables that track usage, apply rates, compute cost, enforce quotas,
+// and aggregate daily summaries.
 //
 // Source: inventory-watcher/internal/inventory/store.go (schema)
 // Models: inventory-watcher/internal/inventory/models.go
@@ -10,7 +11,7 @@ digraph erd_metering_cost {
         rankdir=LR
         fontname="Helvetica"
         fontsize=12
-        label="Metering, Rating & Quotas\n(store.go / models.go / rating.go)"
+        label="Metering, Rating, Cost & Quotas\n(store.go / models.go / rating.go)"
         labelloc=t
         bgcolor=white
         pad=0.5
@@ -34,11 +35,13 @@ digraph erd_metering_cost {
             <TR><TD ALIGN="LEFT">resource_type</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">resource_id</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">tenant_id</TD><TD>TEXT</TD><TD></TD></TR>
+            <TR><TD ALIGN="LEFT">project_id</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">meter_name</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">value</TD><TD>NUMERIC(18,6)</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">unit</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">period_start</TD><TD>TIMESTAMPTZ</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">period_end</TD><TD>TIMESTAMPTZ</TD><TD></TD></TR>
+            <TR><TD ALIGN="LEFT">rated_at</TD><TD>TIMESTAMPTZ</TD><TD></TD></TR>
         </TABLE>
     >]
 
@@ -51,6 +54,7 @@ digraph erd_metering_cost {
             <TR><TD ALIGN="LEFT">meter_name</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">koku_metric</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">cost_type</TD><TD>TEXT</TD><TD></TD></TR>
+            <TR><TD ALIGN="LEFT">description</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">price_per_unit</TD><TD>NUMERIC(18,10)</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">currency</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">tiers</TD><TD>JSONB</TD><TD>nullable</TD></TR>
@@ -66,6 +70,7 @@ digraph erd_metering_cost {
             <TR><TD ALIGN="LEFT">metering_entry_id</TD><TD>BIGINT</TD><TD>FK</TD></TR>
             <TR><TD ALIGN="LEFT">rate_id</TD><TD>BIGINT</TD><TD>FK</TD></TR>
             <TR><TD ALIGN="LEFT">tenant_id</TD><TD>TEXT</TD><TD></TD></TR>
+            <TR><TD ALIGN="LEFT">project_id</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">resource_type</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">resource_id</TD><TD>TEXT</TD><TD></TD></TR>
             <TR><TD ALIGN="LEFT">meter_name</TD><TD>TEXT</TD><TD></TD></TR>
@@ -109,7 +114,7 @@ digraph erd_metering_cost {
     >]
 
     // Data flow
-    metering_entries -> cost_entries [label="rated by\n(rating sweep)" color="#F44336" fontcolor="#F44336"]
+    metering_entries -> cost_entries [label="rating sweep\n(30s)" color="#F44336" fontcolor="#F44336"]
     rates -> cost_entries [label="rate applied" color="#9C27B0" fontcolor="#9C27B0"]
     metering_entries -> quotas [label="SUM() compared\nagainst limit" style=dashed color="#009688" fontcolor="#009688"]
     quotas -> alerts [label="threshold\ncrossed" color="#FBC02D" fontcolor="#FBC02D"]

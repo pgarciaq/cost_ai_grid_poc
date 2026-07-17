@@ -1,5 +1,12 @@
 # Rate Configuration Guide
 
+How to configure pricing: per-SKU rates, tenant overrides, tiered
+pricing, and MaaS token pricing.
+
+**See also:** [Metric Calculation Reference](metric-calculation-reference.md) —
+how meters are computed, catalog fallback, and worked examples
+showing the full path from resource to dollar amount.
+
 The rate engine supports per-SKU pricing via the `instance_type`
 dimension on the `rates` table. This enables three distinct pricing
 models that can be mixed per resource type.

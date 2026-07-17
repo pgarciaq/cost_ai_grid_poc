@@ -222,8 +222,10 @@ func clusterMeters(cl inventory.ClusterRecord, projectID string, durationSeconds
 		}
 	}
 
+	totalWorkerNodes := 0
 	totalWorkerNodeSeconds := 0.0
 	for _, ns := range nodeSets {
+		totalWorkerNodes += int(ns.Size)
 		totalWorkerNodeSeconds += float64(ns.Size) * durationSeconds
 	}
 
@@ -236,6 +238,20 @@ func clusterMeters(cl inventory.ClusterRecord, projectID string, durationSeconds
 			MeterName:    "cluster_worker_node_seconds",
 			Value:        totalWorkerNodeSeconds,
 			Unit:         "node_seconds",
+			PeriodStart:  periodStart,
+			PeriodEnd:    periodEnd,
+		})
+	}
+
+	if totalWorkerNodes > 0 {
+		entries = append(entries, inventory.MeteringEntry{
+			ResourceType: "cluster",
+			ResourceID:   cl.ClusterID,
+			TenantID:     cl.Tenant,
+			ProjectID:    projectID,
+			MeterName:    "cluster_worker_node_count",
+			Value:        float64(totalWorkerNodes),
+			Unit:         "nodes",
 			PeriodStart:  periodStart,
 			PeriodEnd:    periodEnd,
 		})
