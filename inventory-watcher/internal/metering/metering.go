@@ -69,9 +69,7 @@ func (m *Meter) meterComputeInstances(ctx context.Context, now time.Time) {
 		return
 	}
 
-	// Build instance-type lookup for enriching cores/memory when OSAC
-	// doesn't carry them on the ComputeInstance directly.
-	itCache := m.buildInstanceTypeCache(ctx)
+	instanceTypes := m.loadInstanceTypeMap(ctx)
 
 	metered := 0
 	for _, inst := range instances {
@@ -85,10 +83,8 @@ func (m *Meter) meterComputeInstances(ctx context.Context, now time.Time) {
 			continue
 		}
 
-		m.enrichFromInstanceType(&inst, itCache)
-
 		projectID := m.resolveProject(ctx, inst.Project, inst.Tenant)
-		entries := computeInstanceMeters(inst, projectID, durationSeconds, periodStart, now)
+		entries := computeInstanceMeters(inst, instanceTypes, projectID, durationSeconds, periodStart, now)
 		if err := m.store.InsertMeteringEntryBatch(ctx, entries); err != nil {
 			m.logger.Error("failed to insert metering entries",
 				"resource", inst.InstanceID, "error", err)
@@ -107,36 +103,6 @@ func (m *Meter) meterComputeInstances(ctx context.Context, now time.Time) {
 
 	if metered > 0 {
 		m.logger.Info("metering sweep complete", "compute_instances", metered)
-	}
-}
-
-func (m *Meter) buildInstanceTypeCache(ctx context.Context) map[string]inventory.InstanceTypeRecord {
-	cache := make(map[string]inventory.InstanceTypeRecord)
-	types, err := m.store.ListAllInstanceTypes(ctx)
-	if err != nil {
-		m.logger.Warn("failed to load instance types for enrichment", "error", err)
-		return cache
-	}
-	for _, it := range types {
-		cache[it.InstanceTypeID] = it
-		if it.Name != "" {
-			cache[it.Name] = it
-		}
-	}
-	return cache
-}
-
-func (m *Meter) enrichFromInstanceType(inst *inventory.ComputeInstanceRecord, cache map[string]inventory.InstanceTypeRecord) {
-	if (inst.Cores > 0 && inst.MemoryGiB > 0) || inst.InstanceType == "" {
-		return
-	}
-	if it, ok := cache[inst.InstanceType]; ok {
-		if inst.Cores == 0 {
-			inst.Cores = it.Cores
-		}
-		if inst.MemoryGiB == 0 {
-			inst.MemoryGiB = it.MemoryGiB
-		}
 	}
 }
 
@@ -164,27 +130,28 @@ func (m *Meter) MeterComputeInstanceFinal(ctx context.Context, instanceID string
 		return
 	}
 
-	if inst.Cores == 0 || inst.MemoryGiB == 0 {
-		if inst.InstanceType != "" {
-			if it, err := m.store.GetInstanceType(ctx, inst.InstanceType); err == nil {
-				if inst.Cores == 0 {
-					inst.Cores = it.Cores
-				}
-				if inst.MemoryGiB == 0 {
-					inst.MemoryGiB = it.MemoryGiB
-				}
-			}
-		}
-	}
-
 	projectID := m.resolveProject(ctx, inst.Project, inst.Tenant)
-	entries := computeInstanceMeters(*inst, projectID, durationSeconds, periodStart, deletedAt)
+	instanceTypes := m.loadInstanceTypeMap(ctx)
+	entries := computeInstanceMeters(*inst, instanceTypes, projectID, durationSeconds, periodStart, deletedAt)
 	if err := m.store.InsertMeteringEntryBatch(ctx, entries); err != nil {
 		m.logger.Error("failed to insert final metering entries",
 			"resource", instanceID, "error", err)
 	}
 
 	m.logger.Debug("final metering for deleted instance", "id", instanceID, "duration_seconds", durationSeconds)
+}
+
+func (m *Meter) loadInstanceTypeMap(ctx context.Context) map[string]*inventory.InstanceTypeRecord {
+	all, err := m.store.ListAllInstanceTypes(ctx)
+	if err != nil {
+		m.logger.Error("failed to load instance types for catalog fallback", "error", err)
+		return nil
+	}
+	itMap := make(map[string]*inventory.InstanceTypeRecord, len(all))
+	for i := range all {
+		itMap[all[i].InstanceTypeID] = &all[i]
+	}
+	return itMap
 }
 
 func (m *Meter) meterClusters(ctx context.Context, now time.Time) {
@@ -384,6 +351,7 @@ type MaaSUsage struct {
 	ModelID             string
 	ModelName           string
 	TenantID            string
+	UserID              string
 	State               string
 	TokensIn            int64
 	TokensOut           int64
@@ -429,6 +397,7 @@ func maasMeters(usage MaaSUsage, projectID string, periodStart, periodEnd time.T
 			ResourceID:   usage.ModelID,
 			TenantID:     usage.TenantID,
 			ProjectID:    projectID,
+			UserID:       usage.UserID,
 			MeterName:    "maas_tokens_in",
 			Value:        float64(usage.TokensIn),
 			Unit:         "tokens",
@@ -443,36 +412,9 @@ func maasMeters(usage MaaSUsage, projectID string, periodStart, periodEnd time.T
 			ResourceID:   usage.ModelID,
 			TenantID:     usage.TenantID,
 			ProjectID:    projectID,
+			UserID:       usage.UserID,
 			MeterName:    "maas_tokens_out",
 			Value:        float64(usage.TokensOut),
-			Unit:         "tokens",
-			PeriodStart:  periodStart,
-			PeriodEnd:    periodEnd,
-		})
-	}
-
-	if usage.CachedInputTokens > 0 {
-		entries = append(entries, inventory.MeteringEntry{
-			ResourceType: "model",
-			ResourceID:   usage.ModelID,
-			TenantID:     usage.TenantID,
-			ProjectID:    projectID,
-			MeterName:    "maas_tokens_cached",
-			Value:        float64(usage.CachedInputTokens),
-			Unit:         "tokens",
-			PeriodStart:  periodStart,
-			PeriodEnd:    periodEnd,
-		})
-	}
-
-	if usage.ReasoningTokens > 0 {
-		entries = append(entries, inventory.MeteringEntry{
-			ResourceType: "model",
-			ResourceID:   usage.ModelID,
-			TenantID:     usage.TenantID,
-			ProjectID:    projectID,
-			MeterName:    "maas_tokens_reasoning",
-			Value:        float64(usage.ReasoningTokens),
 			Unit:         "tokens",
 			PeriodStart:  periodStart,
 			PeriodEnd:    periodEnd,
@@ -485,6 +427,7 @@ func maasMeters(usage MaaSUsage, projectID string, periodStart, periodEnd time.T
 			ResourceID:   usage.ModelID,
 			TenantID:     usage.TenantID,
 			ProjectID:    projectID,
+			UserID:       usage.UserID,
 			MeterName:    "maas_requests",
 			Value:        float64(usage.Requests),
 			Unit:         "requests",
@@ -496,9 +439,18 @@ func maasMeters(usage MaaSUsage, projectID string, periodStart, periodEnd time.T
 	return entries
 }
 
-func computeInstanceMeters(inst inventory.ComputeInstanceRecord, projectID string, durationSeconds float64, periodStart, periodEnd time.Time) []inventory.MeteringEntry {
+func computeInstanceMeters(inst inventory.ComputeInstanceRecord, instanceTypes map[string]*inventory.InstanceTypeRecord, projectID string, durationSeconds float64, periodStart, periodEnd time.Time) []inventory.MeteringEntry {
 	cores := inst.Cores
 	memGiB := inst.MemoryGiB
+
+	// Catalog fallback: if cores/memory are zero (OSAC removing these
+	// from ComputeInstance), resolve from the InstanceType catalog.
+	if cores == 0 && inst.InstanceType != "" {
+		if it, ok := instanceTypes[inst.InstanceType]; ok {
+			cores = it.Cores
+			memGiB = it.MemoryGiB
+		}
+	}
 
 	return []inventory.MeteringEntry{
 		{
@@ -506,6 +458,7 @@ func computeInstanceMeters(inst inventory.ComputeInstanceRecord, projectID strin
 			ResourceID:   inst.InstanceID,
 			TenantID:     inst.Tenant,
 			ProjectID:    projectID,
+			InstanceType: inst.InstanceType,
 			MeterName:    "vm_uptime_seconds",
 			Value:        durationSeconds,
 			Unit:         "seconds",
@@ -517,6 +470,7 @@ func computeInstanceMeters(inst inventory.ComputeInstanceRecord, projectID strin
 			ResourceID:   inst.InstanceID,
 			TenantID:     inst.Tenant,
 			ProjectID:    projectID,
+			InstanceType: inst.InstanceType,
 			MeterName:    "vm_cpu_core_seconds",
 			Value:        float64(cores) * durationSeconds,
 			Unit:         "core_seconds",
@@ -528,6 +482,7 @@ func computeInstanceMeters(inst inventory.ComputeInstanceRecord, projectID strin
 			ResourceID:   inst.InstanceID,
 			TenantID:     inst.Tenant,
 			ProjectID:    projectID,
+			InstanceType: inst.InstanceType,
 			MeterName:    "vm_memory_gib_seconds",
 			Value:        float64(memGiB) * durationSeconds,
 			Unit:         "gib_seconds",
