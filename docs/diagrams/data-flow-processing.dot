@@ -107,8 +107,6 @@ digraph data_flow_processing {
             <TR><TD COLSPAN="2" BGCOLOR="#FFFDE7"><I>Consumption-based (from HTTP ingest):</I></TD></TR>
             <TR><TD ALIGN="LEFT">maas_tokens_in</TD><TD>prompt tokens</TD></TR>
             <TR><TD ALIGN="LEFT">maas_tokens_out</TD><TD>completion tokens</TD></TR>
-            <TR><TD ALIGN="LEFT">maas_tokens_cached</TD><TD>cached tokens</TD></TR>
-            <TR><TD ALIGN="LEFT">maas_tokens_reasoning</TD><TD>reasoning tokens</TD></TR>
             <TR><TD ALIGN="LEFT">maas_requests</TD><TD>request count</TD></TR>
         </TABLE>
     > shape=plain]
