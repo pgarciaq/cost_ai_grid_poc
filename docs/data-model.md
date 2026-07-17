@@ -13,6 +13,17 @@ into two groups:
 **Go models:** [`inventory-watcher/internal/inventory/models.go`](../inventory-watcher/internal/inventory/models.go)
 **Rating logic:** [`inventory-watcher/internal/rating/rating.go`](../inventory-watcher/internal/rating/rating.go)
 
+## Data Flow
+
+![Data Flow](diagrams/data-flow.svg)
+
+*Source: [`docs/diagrams/data-flow.dot`](diagrams/data-flow.dot)*
+
+Shows how events enter the system (OSAC Watch, IPP gateway, HTTP POST),
+flow through goroutines (watcher, reconciler, ingest, metering sweep,
+rating sweep), and land in tables. Optional goroutines (koku-sync,
+splunk forwarder) are activated by env vars.
+
 ## ERD: Inventory & Events
 
 ![Inventory & Events ERD](diagrams/erd-inventory.svg)
