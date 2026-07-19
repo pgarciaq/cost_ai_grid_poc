@@ -379,6 +379,18 @@ See also: [`snippets/query-costs.sh`](../snippets/query-costs.sh) for demo queri
 
 ---
 
+### REQ-7 — Audit Trail
+**Status:** Done
+**Spec:** [poc_requirements_overview.md#req-7](https://github.com/myersCody/cost_ai_grid_poc/blob/main/docs/requirements/poc_requirements_overview.md#req-7--audit-trail)
+
+| Acceptance Criterion | Status | Implementation |
+|---|---|---|
+| Billing ledgers match consumption logs | Done | `raw_events` → `metering_entries` → `cost_entries` — immutable pipeline |
+| Tamper-resistant audit trail | Done | `raw_events` table is append-only; [Splunk HEC forwarder](splunk-audit-forwarding.md) streams to Splunk for long-term retention |
+| Human-readable error logging | Done | Structured JSON logging via `log/slog`; Splunk search for dispute resolution |
+
+---
+
 ## Future Work (Post-PoC)
 
 | Req | Title | Status | Notes |
