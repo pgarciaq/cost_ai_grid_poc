@@ -30,6 +30,12 @@
 | **Cost tier** | What *rate* applies to usage? | **REQ-11** | Keep serving; charge next band (incl. windowed free→paid) — *if admin configures free→charge* |
 | **Wallet** | How much prepaid balance remains? | **REQ-14** | Deduct spend; low-balance alerts |
 
+Do **not** treat wallets as “budgets with no time limit.” That would (1) force
+OSAC / tenant admins to operate Cost’s budget abstraction instead of a prepaid
+wallet UX, and (2) mis-model settlement — wallet top-up money is already
+collected at card charge time, whereas a budget is a ceiling on spend that is
+still to be billed. See [REQ-14 in the overview](poc_requirements_overview.md#req-14-wallets-prepaid-balance).
+
 The same windowed pattern (e.g. “1M tokens every 5 hours”) can be configured
 as **free→charge** (REQ-11) or **allow→deny** (REQ-9) by the OSAC or Cost
 Management administrator. Mode is per configuration, not a global product rule.

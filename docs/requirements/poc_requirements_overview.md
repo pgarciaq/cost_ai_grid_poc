@@ -323,9 +323,18 @@ Send threshold notifications from RHCM to OSAC when cost/quota consumption hits 
 Support prepaid wallets so service providers can move from post-payment to pre-payment. Customers top up a wallet with a monetary amount; metered spend is deducted from that balance. When remaining funds fall below a configurable threshold (e.g. less than X% of the topped-up amount), alerts are sent.
 
 **Definitions (contrast with REQ-9):**
-- **Budget** (REQ-9) = monetary *ceiling* — "do not spend more than $N"
+- **Budget** (REQ-9) = monetary *ceiling* — "do not spend more than $N" (typically over a period; unused budget is not prepaid cash)
 - **Wallet** (this requirement) = prepaid *balance* — "spend was prepaid; deduct until balance reaches zero (or a reserved floor)"
 - Both may coexist: a tenant can have a wallet balance *and* a budget/quota limit
+
+**Why not implement wallets as “budgets with no time limit”?**
+
+A wallet *looks* a bit like an open-ended monetary budget (a balance that shrinks as spend accrues). Modeling it that way is tempting but is a poor product fit for two reasons:
+
+1. **Leaks internal Cost Management complexity to Sovereign Cloud admins.** OSAC / tenant administrators should think in prepaid-wallet terms (top up, remaining balance, low-balance alerts). Forcing them to configure “a budget with no spend-by date” exposes Cost’s quota/budget machinery as the user model and confuses the prepaid product with post-paid spending limits.
+2. **Settlement already happened at top-up.** When a customer tops up with a credit card, that money is already in the Sovereign Cloud’s coffers. Billing and settlement occur at top-up time — not later when metered usage is consumed. A budget models a *future* spend ceiling on usage that will be billed; a wallet models *already-collected* funds that are drawn down. Treating draw-down as “budget consumption” would imply the wrong commercial/settlement semantics (as if the money still needed to be billed).
+
+Wallets therefore need an explicit prepaid-balance concept (this requirement), even if some ledger mechanics are shared with budgets under the hood.
 
 **Acceptance Criteria:**
 - RHCM can create, top up, and query wallet balances scoped to tenant (and optionally project)
@@ -703,6 +712,7 @@ MFA, granular RBAC for billing admins, and short-lived auth tokens.
 
 **Changelog — v1.5 (Jul 20, 2026):**
 - REQ-14 (new): Wallets (prepaid balance) — from AI Grid MB-005; PoC task [COST-7939](https://redhat.atlassian.net/browse/COST-7939) under COST-7756; product feature [COST-7938](https://redhat.atlassian.net/browse/COST-7938); contrasts with budgets (REQ-9); low-balance alerts pair with REQ-10
+- REQ-14: clarified wallets must not be modeled as “budgets with no time limit” — leaks Cost complexity to OSAC/tenant admins; top-up settlement already happened at card charge (unlike post-paid budget ceilings)
 - REQ-9: PoC task link fixed to [COST-7805](https://redhat.atlassian.net/browse/COST-7805); no project-limit overcommit; Jul 31 = full REQ-9 gap list; budget/entitlement open questions refined
 - REQ-11: admin chooses free→charge vs allow→deny; Go snippets restored to match `inventory.Tier` / `ApplyRate` (`float64`)
 - REQ-9: added [req9-quota-budget-gap-analysis.md](req9-quota-budget-gap-analysis.md); clarified boundary with REQ-11 (ceilings vs pricing); overview current state updated to match code
