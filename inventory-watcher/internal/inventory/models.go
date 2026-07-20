@@ -127,6 +127,8 @@ type MeteringEntry struct {
 	ResourceID   string    `json:"resource_id"`
 	TenantID     string    `json:"tenant_id"`
 	ProjectID    string    `json:"project_id"`
+	UserID       string    `json:"user_id"`
+	InstanceType string    `json:"instance_type"`
 	MeterName    string    `json:"meter_name"`
 	Value        float64   `json:"value"`
 	Unit         string    `json:"unit"`
@@ -143,6 +145,7 @@ type RateRecord struct {
 	ID            int64      `json:"id"`
 	TenantID      *string    `json:"tenant_id"`
 	ResourceType  string     `json:"resource_type"`
+	InstanceType  string     `json:"instance_type"`
 	MeterName     string     `json:"meter_name"`
 	KokuMetric    string     `json:"koku_metric"`
 	CostType      string     `json:"cost_type"`
@@ -160,6 +163,7 @@ type CostEntry struct {
 	RateID          int64     `json:"rate_id"`
 	TenantID        string    `json:"tenant_id"`
 	ProjectID       string    `json:"project_id"`
+	UserID          string    `json:"user_id"`
 	ResourceType    string    `json:"resource_type"`
 	ResourceID      string    `json:"resource_id"`
 	MeterName       string    `json:"meter_name"`
@@ -205,21 +209,6 @@ type AlertRecord struct {
 	FiredAt      time.Time `json:"fired_at"`
 }
 
-type DailyUsageSummary struct {
-	UsageDate    time.Time `json:"usage_date"`
-	ClusterID    string    `json:"cluster_id"`
-	Tenant       string    `json:"tenant"`
-	Project      string    `json:"project"`
-	ResourceID   string    `json:"resource_id"`
-	ResourceType string    `json:"resource_type"`
-	InstanceType string    `json:"instance_type"`
-	Cores        int32     `json:"cores"`
-	MemoryGiB    int32     `json:"memory_gib"`
-	CPUCoreHours float64   `json:"cpu_core_hours"`
-	MemoryGBHours float64  `json:"memory_gb_hours"`
-	DurationHours float64  `json:"duration_hours"`
-}
-
 type CostReportRow struct {
 	Date               string  `json:"date,omitempty"`
 	Group              string  `json:"group"`
@@ -234,6 +223,7 @@ type CostBreakdownRow struct {
 	Date         string  `json:"date"`
 	TenantID     string  `json:"tenant_id"`
 	ProjectID    string  `json:"project_id"`
+	UserID       string  `json:"user_id"`
 	ResourceType string  `json:"resource_type"`
 	ResourceID   string  `json:"resource_id"`
 	MeterName    string  `json:"meter_name"`

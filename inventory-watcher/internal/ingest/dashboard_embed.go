@@ -223,7 +223,6 @@ async function fetchConfig() {
       cfgRow('Connection', cfg.inventory_db_host);
     $('cfgIntervals').innerHTML =
       cfgRow('Reconcile', cfg.reconcile_interval) +
-      cfgRow('Summarize', cfg.summarize_interval) +
       cfgRow('Metering Sweep', cfg.metering_interval) +
       cfgRow('Rating Sweep', cfg.rating_interval);
     $('cfgService').innerHTML =
@@ -270,9 +269,12 @@ async function refresh() {
 
     const report = await fetchJSON(url);
 
-    $('totalCost').textContent = fmt(report.meta.total.cost);
-    $('infraCost').textContent = fmt(report.meta.total.infrastructure_cost);
-    $('suppCost').textContent = fmt(report.meta.total.supplementary_cost);
+    const tc = report.meta.total.cost;
+    const ic = report.meta.total.infrastructure;
+    const sc = report.meta.total.supplementary;
+    $('totalCost').textContent = fmt(typeof tc === 'object' ? (tc.total || tc.usage || {}).value || 0 : tc);
+    $('infraCost').textContent = fmt(typeof ic === 'object' ? (ic.total || ic.usage || {}).value || 0 : ic);
+    $('suppCost').textContent = fmt(typeof sc === 'object' ? (sc.total || sc.usage || {}).value || 0 : sc);
 
     const maxCost = Math.max(...report.data.map(r => r.cost), 0.001);
     const tbody = $('reportBody');
