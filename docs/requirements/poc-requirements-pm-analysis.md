@@ -568,7 +568,7 @@ Still underspecified as a hard acceptance bar, but Jul 20 added two concrete con
 ## Deprioritized / Parked (still worth PM visibility)
 
 ### 18. REQ-8 — Bare Metal Costing (OSAC Bare Metal Service)
-**Status: Done (built ahead of schedule) — but Priority downgraded to Parked for Jul 31** &nbsp;·&nbsp; [COST-7801](https://redhat.atlassian.net/browse/COST-7801)
+**Status: Done (built ahead of schedule) — but Priority downgraded to Parked for Jul 31** &nbsp;·&nbsp; [COST-7811](https://redhat.atlassian.net/browse/COST-7811)
 
 Support bare metal nodes provisioned through OSAC (BMaaS), consuming bare metal CloudEvents for capacity-based costing — including standalone nodes outside OpenShift clusters (Windows, RHEL, Oracle Exadata, etc.).
 
