@@ -1207,6 +1207,20 @@ func (s *Store) MeteringSum(ctx context.Context, tenantID, meterName string, fro
 	return sum, err
 }
 
+// MeteringSumBefore returns the sum excluding entries at or after the given ID.
+// Used by the cumulative tier sweep to get prior usage before the current entry.
+func (s *Store) MeteringSumBefore(ctx context.Context, tenantID, meterName string, from, to time.Time, beforeID int64) (float64, error) {
+	var sum float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(value), 0)
+		FROM metering_entries
+		WHERE tenant_id = $1 AND meter_name = $2
+		  AND period_start >= $3 AND period_end <= $4
+		  AND id < $5
+	`, tenantID, meterName, from, to, beforeID).Scan(&sum)
+	return sum, err
+}
+
 // CostSum returns the total cost for a tenant + meter in a time range.
 func (s *Store) CostSum(ctx context.Context, tenantID, meterName string, from, to time.Time) (float64, error) {
 	var sum float64
