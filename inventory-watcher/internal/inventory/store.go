@@ -1206,7 +1206,7 @@ func (s *Store) QuotasForTenant(ctx context.Context, tenantID string, at time.Ti
 			return nil, err
 		}
 		if thresholdsJSON != nil {
-			json.Unmarshal(thresholdsJSON, &r.Thresholds)
+			_ = json.Unmarshal(thresholdsJSON, &r.Thresholds)
 		}
 		results = append(results, r)
 	}
@@ -1226,7 +1226,7 @@ func (s *Store) GetQuota(ctx context.Context, id int64) (*QuotaRecord, error) {
 		return nil, err
 	}
 	if thresholdsJSON != nil {
-		json.Unmarshal(thresholdsJSON, &r.Thresholds)
+		_ = json.Unmarshal(thresholdsJSON, &r.Thresholds)
 	}
 	return &r, nil
 }
@@ -1257,7 +1257,7 @@ func (s *Store) ListQuotas(ctx context.Context, tenantID string) ([]QuotaRecord,
 			return nil, err
 		}
 		if thresholdsJSON != nil {
-			json.Unmarshal(thresholdsJSON, &r.Thresholds)
+			_ = json.Unmarshal(thresholdsJSON, &r.Thresholds)
 		}
 		results = append(results, r)
 	}
