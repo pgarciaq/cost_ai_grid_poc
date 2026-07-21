@@ -97,7 +97,7 @@ func (r *Rater) sweep(ctx context.Context) {
 				ak := accumKey{me.TenantID, me.MeterName, billing.PeriodLabel(period, me.PeriodEnd)}
 				prior, cached := priorUsageCache[ak]
 				if !cached {
-					prior, _ = r.store.MeteringSum(ctx, me.TenantID, me.MeterName, periodStart, periodEnd)
+					prior, _ = r.store.MeteringSumBefore(ctx, me.TenantID, me.MeterName, periodStart, periodEnd, me.ID)
 					priorUsageCache[ak] = prior
 				}
 				cost = ApplyRateCumulative(me.Value, prior, *rate)
