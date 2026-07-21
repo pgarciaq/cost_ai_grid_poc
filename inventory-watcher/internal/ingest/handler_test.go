@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 
 	"github.com/osac-project/cost-event-consumer/internal/custommetrics"
 	"github.com/osac-project/cost-event-consumer/internal/ingest"
@@ -1257,7 +1258,7 @@ func seedCostEntries(t *testing.T) {
 	// Seed a rate if none exist (tests may run in any order)
 	rateID, _ := testStore.UpsertRate(ctx, inventory.RateRecord{
 		ResourceType: "compute_instance", MeterName: "vm_uptime_seconds",
-		CostType: "Infrastructure", PricePerUnit: 0.01, Currency: "USD",
+		CostType: "Infrastructure", PricePerUnit: decimal.NewFromFloat(0.01), Currency: "USD",
 		EffectiveFrom: now.AddDate(-1, 0, 0),
 	})
 	if rateID == 0 {
@@ -1266,7 +1267,7 @@ func seedCostEntries(t *testing.T) {
 
 	maasRateID, _ := testStore.UpsertRate(ctx, inventory.RateRecord{
 		ResourceType: "model", MeterName: "maas_tokens_in",
-		CostType: "Supplementary", PricePerUnit: 0.001, Currency: "USD",
+		CostType: "Supplementary", PricePerUnit: decimal.NewFromFloat(0.001), Currency: "USD",
 		EffectiveFrom: now.AddDate(-1, 0, 0),
 	})
 	if maasRateID == 0 {
@@ -1276,19 +1277,19 @@ func seedCostEntries(t *testing.T) {
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		MeteringEntryID: 1, RateID: rateID, TenantID: "tenant-a", ProjectID: "proj-1",
 		ResourceType: "compute_instance", ResourceID: "vm-1", MeterName: "vm_uptime_seconds",
-		MeteredValue: 3600, CostAmount: 0.01, Currency: "USD",
+		MeteredValue: 3600, CostAmount: decimal.NewFromFloat(0.01), Currency: "USD",
 		PeriodStart: yesterday, PeriodEnd: yesterday.Add(time.Hour),
 	})
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		MeteringEntryID: 2, RateID: maasRateID, TenantID: "tenant-a", ProjectID: "proj-1",
 		ResourceType: "model", ResourceID: "llama-3", MeterName: "maas_tokens_in",
-		MeteredValue: 1000, CostAmount: 0.001, Currency: "USD",
+		MeteredValue: 1000, CostAmount: decimal.NewFromFloat(0.001), Currency: "USD",
 		PeriodStart: now.Add(-time.Hour), PeriodEnd: now,
 	})
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		MeteringEntryID: 3, RateID: maasRateID, TenantID: "tenant-b", ProjectID: "proj-2",
 		ResourceType: "model", ResourceID: "llama-3", MeterName: "maas_tokens_in",
-		MeteredValue: 500, CostAmount: 0.0005, Currency: "USD",
+		MeteredValue: 500, CostAmount: decimal.NewFromFloat(0.0005), Currency: "USD",
 		PeriodStart: now.Add(-time.Hour), PeriodEnd: now,
 	})
 }
@@ -1873,7 +1874,7 @@ func TestQuotaStatus_MonetaryBudget(t *testing.T) {
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		TenantID: tenantID, ResourceType: "compute_instance",
 		ResourceID: "vm-budget", MeterName: "vm_uptime_seconds",
-		MeteredValue: 3600, CostAmount: 1500.00, Currency: "USD",
+		MeteredValue: 3600, CostAmount: decimal.NewFromFloat(1500.00), Currency: "USD",
 		PeriodStart: monthStart, PeriodEnd: now,
 	})
 
