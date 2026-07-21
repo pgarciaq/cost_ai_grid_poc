@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 
 	"github.com/osac-project/cost-event-consumer/internal/inventory"
 )
@@ -99,7 +100,7 @@ func TestSweep_RatesUnratedEntries(t *testing.T) {
 		ResourceType: "test_resource",
 		MeterName:    meterName,
 		CostType:     "Infrastructure",
-		PricePerUnit: 0.50,
+		PricePerUnit: d(0.50),
 		Currency:     "USD",
 		EffectiveFrom: effectiveFrom,
 	}); err != nil {
@@ -360,14 +361,14 @@ func TestSweep_CumulativeTiers(t *testing.T) {
 		ResourceType:  "test_cumul",
 		MeterName:     meterName,
 		CostType:      "Supplementary",
-		PricePerUnit:  0,
+		PricePerUnit:  decimal.Zero,
 		Currency:      "USD",
 		TierMode:      "cumulative",
 		TierPeriod:    "monthly",
 		Tiers: []inventory.Tier{
-			{UpTo: &up100, PricePerUnit: 0},
-			{UpTo: &up500, PricePerUnit: 0.10},
-			{UpTo: nil, PricePerUnit: 0.05},
+			{UpTo: &up100, PricePerUnit: decimal.Zero},
+			{UpTo: &up500, PricePerUnit: d(0.10)},
+			{UpTo: nil, PricePerUnit: d(0.05)},
 		},
 		EffectiveFrom: effectiveFrom,
 	}); err != nil {
@@ -486,12 +487,12 @@ func TestSweep_CumulativeTiers_PerEventFallback(t *testing.T) {
 		ResourceType:  "test_perevent",
 		MeterName:     meterName,
 		CostType:      "Supplementary",
-		PricePerUnit:  0,
+		PricePerUnit:  decimal.Zero,
 		Currency:      "USD",
 		TierMode:      "per_event",
 		Tiers: []inventory.Tier{
-			{UpTo: &up100, PricePerUnit: 0},
-			{UpTo: nil, PricePerUnit: 0.10},
+			{UpTo: &up100, PricePerUnit: decimal.Zero},
+			{UpTo: nil, PricePerUnit: d(0.10)},
 		},
 		EffectiveFrom: effectiveFrom,
 	}); err != nil {
@@ -551,13 +552,13 @@ func TestSweep_CumulativeTiers_DifferentTenants(t *testing.T) {
 		ResourceType:  "test_multitenant",
 		MeterName:     meterName,
 		CostType:      "Infrastructure",
-		PricePerUnit:  0,
+		PricePerUnit:  decimal.Zero,
 		Currency:      "USD",
 		TierMode:      "cumulative",
 		TierPeriod:    "monthly",
 		Tiers: []inventory.Tier{
-			{UpTo: &up50, PricePerUnit: 0},
-			{UpTo: nil, PricePerUnit: 1.00},
+			{UpTo: &up50, PricePerUnit: decimal.Zero},
+			{UpTo: nil, PricePerUnit: d(1.00)},
 		},
 		EffectiveFrom: effectiveFrom,
 	}); err != nil {
@@ -638,7 +639,7 @@ func TestEvaluateThresholds_MonetaryBudget(t *testing.T) {
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		TenantID: tenantID, ResourceType: "compute_instance",
 		ResourceID: "vm-budget-thresh", MeterName: "vm_uptime_seconds",
-		MeteredValue: 86400, CostAmount: 800.0, Currency: "USD",
+		MeteredValue: 86400, CostAmount: d(800.0), Currency: "USD",
 		PeriodStart: monthStart, PeriodEnd: now,
 	})
 
