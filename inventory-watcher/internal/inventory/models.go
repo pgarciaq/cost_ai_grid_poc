@@ -3,6 +3,8 @@ package inventory
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type ProjectRecord struct {
@@ -137,8 +139,8 @@ type MeteringEntry struct {
 }
 
 type Tier struct {
-	UpTo         *float64 `json:"up_to"`
-	PricePerUnit float64  `json:"price_per_unit"`
+	UpTo         *float64        `json:"up_to"`
+	PricePerUnit decimal.Decimal `json:"price_per_unit"`
 }
 
 type RateRecord struct {
@@ -149,10 +151,10 @@ type RateRecord struct {
 	MeterName     string     `json:"meter_name"`
 	KokuMetric    string     `json:"koku_metric"`
 	CostType      string     `json:"cost_type"`
-	PricePerUnit  float64    `json:"price_per_unit"`
-	Currency      string     `json:"currency"`
-	Tiers         []Tier     `json:"tiers"`
-	TierMode      string     `json:"tier_mode"`
+	PricePerUnit  decimal.Decimal `json:"price_per_unit"`
+	Currency      string         `json:"currency"`
+	Tiers         []Tier         `json:"tiers"`
+	TierMode      string         `json:"tier_mode"`
 	TierPeriod    string     `json:"tier_period"`
 	Description   string     `json:"description"`
 	EffectiveFrom time.Time  `json:"effective_from"`
@@ -169,8 +171,8 @@ type CostEntry struct {
 	ResourceType    string    `json:"resource_type"`
 	ResourceID      string    `json:"resource_id"`
 	MeterName       string    `json:"meter_name"`
-	MeteredValue    float64   `json:"metered_value"`
-	CostAmount      float64   `json:"cost_amount"`
+	MeteredValue    float64         `json:"metered_value"`
+	CostAmount      decimal.Decimal `json:"cost_amount"`
 	Currency        string    `json:"currency"`
 	PeriodStart     time.Time `json:"period_start"`
 	PeriodEnd       time.Time `json:"period_end"`
@@ -178,6 +180,7 @@ type CostEntry struct {
 
 type QuotaRecord struct {
 	ID            int64      `json:"id"`
+	Name          string     `json:"name"`
 	TenantID      string     `json:"tenant_id"`
 	ProjectID     string     `json:"project_id"`
 	ResourceType  string     `json:"resource_type"`
@@ -185,6 +188,8 @@ type QuotaRecord struct {
 	LimitValue    float64    `json:"limit_value"`
 	Unit          string     `json:"unit"`
 	Period        string     `json:"period"`
+	Policy        string     `json:"policy"`
+	Thresholds    []float64  `json:"thresholds,omitempty"`
 	EffectiveFrom time.Time  `json:"effective_from"`
 	EffectiveTo   *time.Time `json:"effective_to"`
 }

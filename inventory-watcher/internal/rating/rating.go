@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/osac-project/cost-event-consumer/internal/billing"
 	"github.com/osac-project/cost-event-consumer/internal/inventory"
 	"github.com/osac-project/cost-event-consumer/internal/metrics"
@@ -85,7 +87,7 @@ func (r *Rater) sweep(ctx context.Context) {
 			continue
 		}
 
-		var cost float64
+		var cost decimal.Decimal
 		if len(rate.Tiers) > 0 && rate.TierMode == "cumulative" {
 			period := rate.TierPeriod
 			if period == "" {
@@ -229,14 +231,27 @@ func (r *Rater) evaluateThresholds(ctx context.Context) {
 			}
 			period := billing.PeriodLabel(qPeriod, now)
 
-			consumed, err := r.store.MeteringSum(ctx, tenantID, q.MeterName, periodStart, periodEnd)
+			var consumed float64
+			if isBudgetUnit(q.Unit) {
+				if q.MeterName == "" || q.MeterName == "*" {
+					consumed, err = r.store.TenantCostSum(ctx, tenantID, periodStart, periodEnd)
+				} else {
+					consumed, err = r.store.CostSum(ctx, tenantID, q.MeterName, periodStart, periodEnd)
+				}
+			} else {
+				consumed, err = r.store.MeteringSum(ctx, tenantID, q.MeterName, periodStart, periodEnd)
+			}
 			if err != nil || consumed == 0 || q.LimitValue <= 0 {
 				continue
 			}
 
 			pct := (consumed / q.LimitValue) * 100
 
-			for _, threshold := range ThresholdLevels {
+			levels := ThresholdLevels
+			if len(q.Thresholds) > 0 {
+				levels = q.Thresholds
+			}
+			for _, threshold := range levels {
 				if pct >= threshold {
 					inserted, err := r.store.InsertAlert(ctx, inventory.AlertRecord{
 						TenantID:     tenantID,
@@ -266,16 +281,25 @@ func (r *Rater) evaluateThresholds(ctx context.Context) {
 	}
 }
 
+func isBudgetUnit(unit string) bool {
+	switch unit {
+	case "USD", "EUR", "GBP", "JPY", "CNY", "CHF", "CAD", "AUD":
+		return true
+	}
+	return false
+}
+
 // ApplyRate computes cost for a metered value using flat or tiered pricing.
-func ApplyRate(value float64, rate inventory.RateRecord) float64 {
+// Returns decimal.Decimal for billing-grade precision.
+func ApplyRate(value float64, rate inventory.RateRecord) decimal.Decimal {
 	if len(rate.Tiers) > 0 {
 		return applyTieredRate(value, rate.Tiers)
 	}
-	return value * rate.PricePerUnit
+	return decimal.NewFromFloat(value).Mul(rate.PricePerUnit)
 }
 
-func applyTieredRate(value float64, tiers []inventory.Tier) float64 {
-	cost := 0.0
+func applyTieredRate(value float64, tiers []inventory.Tier) decimal.Decimal {
+	cost := decimal.Zero
 	remaining := value
 	prev := 0.0
 
@@ -297,7 +321,7 @@ func applyTieredRate(value float64, tiers []inventory.Tier) float64 {
 			consumed = remaining
 		}
 
-		cost += consumed * tier.PricePerUnit
+		cost = cost.Add(decimal.NewFromFloat(consumed).Mul(tier.PricePerUnit))
 		remaining -= consumed
 	}
 
@@ -307,18 +331,18 @@ func applyTieredRate(value float64, tiers []inventory.Tier) float64 {
 // ApplyRateCumulative computes cost for a metered value given prior
 // cumulative usage in the billing period. The waterfall starts at
 // priorUsage instead of 0 — only the marginal delta is priced.
-func ApplyRateCumulative(value, priorUsage float64, rate inventory.RateRecord) float64 {
+func ApplyRateCumulative(value, priorUsage float64, rate inventory.RateRecord) decimal.Decimal {
 	if len(rate.Tiers) == 0 {
-		return value * rate.PricePerUnit
+		return decimal.NewFromFloat(value).Mul(rate.PricePerUnit)
 	}
 	return applyTieredRateCumulative(value, priorUsage, rate.Tiers)
 }
 
-func applyTieredRateCumulative(value, priorUsage float64, tiers []inventory.Tier) float64 {
+func applyTieredRateCumulative(value, priorUsage float64, tiers []inventory.Tier) decimal.Decimal {
 	totalUsage := priorUsage + value
 	costTotal := applyTieredRate(totalUsage, tiers)
 	costPrior := applyTieredRate(priorUsage, tiers)
-	return costTotal - costPrior
+	return costTotal.Sub(costPrior)
 }
 
 // SeedDefaultRates populates the rates table with sensible defaults if empty.
@@ -335,18 +359,21 @@ func SeedDefaultRates(ctx context.Context, store *inventory.Store, logger *slog.
 	freeTier1M := 1_000_000.0
 	freeTier20GiB := 20.0
 	paidTier120GiB := 120.0
+	d := decimal.NewFromFloat
+	perHour := func(rate float64) decimal.Decimal { return d(rate).Div(d(3600)) }
+	perMillion := func(rate float64) decimal.Decimal { return d(rate).Div(d(1_000_000)) }
 
 	now := time.Now().UTC()
 	defaults := []inventory.RateRecord{
-		{ResourceType: "compute_instance", MeterName: "vm_uptime_seconds", KokuMetric: "vm_cost_per_hour", CostType: "Infrastructure", PricePerUnit: 0.01 / 3600, Currency: "USD", EffectiveFrom: now},
-		{ResourceType: "compute_instance", MeterName: "vm_cpu_core_seconds", KokuMetric: "cpu_core_request_per_hour", CostType: "Supplementary", PricePerUnit: 0.005 / 3600, Currency: "USD", EffectiveFrom: now},
-		{ResourceType: "compute_instance", MeterName: "vm_memory_gib_seconds", KokuMetric: "memory_gb_request_per_hour", CostType: "Supplementary", PricePerUnit: 0, Currency: "USD", TierMode: "cumulative", TierPeriod: "monthly", Tiers: []inventory.Tier{{UpTo: &freeTier20GiB, PricePerUnit: 0}, {UpTo: &paidTier120GiB, PricePerUnit: 0.08}, {UpTo: nil, PricePerUnit: 0.07}}, Description: "First 20 GiB free/month, then graduated", EffectiveFrom: now},
-		{ResourceType: "cluster", MeterName: "cluster_uptime_seconds", KokuMetric: "cluster_cost_per_hour", CostType: "Infrastructure", PricePerUnit: 0.50 / 3600, Currency: "USD", EffectiveFrom: now},
-		{ResourceType: "cluster", MeterName: "cluster_worker_node_seconds", KokuMetric: "node_cost_per_hour", CostType: "Infrastructure", PricePerUnit: 0.10 / 3600, Currency: "USD", EffectiveFrom: now},
-		{ResourceType: "model", MeterName: "maas_tokens_in", KokuMetric: "", CostType: "Supplementary", PricePerUnit: 0, Currency: "USD", TierMode: "cumulative", TierPeriod: "monthly", Tiers: []inventory.Tier{{UpTo: &freeTier1M, PricePerUnit: 0}, {UpTo: nil, PricePerUnit: 0.50 / 1_000_000}}, Description: "First 1M tokens free/month, then $0.50/M", EffectiveFrom: now},
-		{ResourceType: "model", MeterName: "maas_tokens_out", KokuMetric: "", CostType: "Supplementary", PricePerUnit: 1.50 / 1_000_000, Currency: "USD", Description: "Completion/output tokens (includes reasoning)", EffectiveFrom: now},
-		{ResourceType: "model", MeterName: "maas_requests", KokuMetric: "", CostType: "Supplementary", PricePerUnit: 5.00 / 1_000_000, Currency: "USD", EffectiveFrom: now},
-		{ResourceType: "bare_metal", MeterName: "bm_uptime_seconds", KokuMetric: "node_cost_per_hour", CostType: "Infrastructure", PricePerUnit: 0.05 / 3600, Currency: "USD", EffectiveFrom: now},
+		{ResourceType: "compute_instance", MeterName: "vm_uptime_seconds", KokuMetric: "vm_cost_per_hour", CostType: "Infrastructure", PricePerUnit: perHour(0.01), Currency: "USD", EffectiveFrom: now},
+		{ResourceType: "compute_instance", MeterName: "vm_cpu_core_seconds", KokuMetric: "cpu_core_request_per_hour", CostType: "Supplementary", PricePerUnit: perHour(0.005), Currency: "USD", EffectiveFrom: now},
+		{ResourceType: "compute_instance", MeterName: "vm_memory_gib_seconds", KokuMetric: "memory_gb_request_per_hour", CostType: "Supplementary", PricePerUnit: decimal.Zero, Currency: "USD", TierMode: "cumulative", TierPeriod: "monthly", Tiers: []inventory.Tier{{UpTo: &freeTier20GiB, PricePerUnit: decimal.Zero}, {UpTo: &paidTier120GiB, PricePerUnit: d(0.08)}, {UpTo: nil, PricePerUnit: d(0.07)}}, Description: "First 20 GiB free/month, then graduated", EffectiveFrom: now},
+		{ResourceType: "cluster", MeterName: "cluster_uptime_seconds", KokuMetric: "cluster_cost_per_hour", CostType: "Infrastructure", PricePerUnit: perHour(0.50), Currency: "USD", EffectiveFrom: now},
+		{ResourceType: "cluster", MeterName: "cluster_worker_node_seconds", KokuMetric: "node_cost_per_hour", CostType: "Infrastructure", PricePerUnit: perHour(0.10), Currency: "USD", EffectiveFrom: now},
+		{ResourceType: "model", MeterName: "maas_tokens_in", KokuMetric: "", CostType: "Supplementary", PricePerUnit: decimal.Zero, Currency: "USD", TierMode: "cumulative", TierPeriod: "monthly", Tiers: []inventory.Tier{{UpTo: &freeTier1M, PricePerUnit: decimal.Zero}, {UpTo: nil, PricePerUnit: perMillion(0.50)}}, Description: "First 1M tokens free/month, then $0.50/M", EffectiveFrom: now},
+		{ResourceType: "model", MeterName: "maas_tokens_out", KokuMetric: "", CostType: "Supplementary", PricePerUnit: perMillion(1.50), Currency: "USD", Description: "Completion/output tokens (includes reasoning)", EffectiveFrom: now},
+		{ResourceType: "model", MeterName: "maas_requests", KokuMetric: "", CostType: "Supplementary", PricePerUnit: perMillion(5.00), Currency: "USD", EffectiveFrom: now},
+		{ResourceType: "bare_metal", MeterName: "bm_uptime_seconds", KokuMetric: "node_cost_per_hour", CostType: "Infrastructure", PricePerUnit: perHour(0.05), Currency: "USD", EffectiveFrom: now},
 	}
 
 	for _, rate := range defaults {
@@ -385,6 +412,7 @@ func SeedDefaultQuotas(ctx context.Context, store *inventory.Store, logger *slog
 		{"maas_tokens_in", 10_000_000, "tokens"},
 		{"maas_tokens_out", 5_000_000, "tokens"},
 		{"maas_requests", 100_000, "requests"},
+		{"*", 5000, "USD"},
 	}
 
 	seeded := 0

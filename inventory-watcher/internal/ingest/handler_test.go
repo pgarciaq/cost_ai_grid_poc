@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 
 	"github.com/osac-project/cost-event-consumer/internal/custommetrics"
 	"github.com/osac-project/cost-event-consumer/internal/ingest"
@@ -1257,7 +1258,7 @@ func seedCostEntries(t *testing.T) {
 	// Seed a rate if none exist (tests may run in any order)
 	rateID, _ := testStore.UpsertRate(ctx, inventory.RateRecord{
 		ResourceType: "compute_instance", MeterName: "vm_uptime_seconds",
-		CostType: "Infrastructure", PricePerUnit: 0.01, Currency: "USD",
+		CostType: "Infrastructure", PricePerUnit: decimal.NewFromFloat(0.01), Currency: "USD",
 		EffectiveFrom: now.AddDate(-1, 0, 0),
 	})
 	if rateID == 0 {
@@ -1266,7 +1267,7 @@ func seedCostEntries(t *testing.T) {
 
 	maasRateID, _ := testStore.UpsertRate(ctx, inventory.RateRecord{
 		ResourceType: "model", MeterName: "maas_tokens_in",
-		CostType: "Supplementary", PricePerUnit: 0.001, Currency: "USD",
+		CostType: "Supplementary", PricePerUnit: decimal.NewFromFloat(0.001), Currency: "USD",
 		EffectiveFrom: now.AddDate(-1, 0, 0),
 	})
 	if maasRateID == 0 {
@@ -1276,19 +1277,19 @@ func seedCostEntries(t *testing.T) {
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		MeteringEntryID: 1, RateID: rateID, TenantID: "tenant-a", ProjectID: "proj-1",
 		ResourceType: "compute_instance", ResourceID: "vm-1", MeterName: "vm_uptime_seconds",
-		MeteredValue: 3600, CostAmount: 0.01, Currency: "USD",
+		MeteredValue: 3600, CostAmount: decimal.NewFromFloat(0.01), Currency: "USD",
 		PeriodStart: yesterday, PeriodEnd: yesterday.Add(time.Hour),
 	})
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		MeteringEntryID: 2, RateID: maasRateID, TenantID: "tenant-a", ProjectID: "proj-1",
 		ResourceType: "model", ResourceID: "llama-3", MeterName: "maas_tokens_in",
-		MeteredValue: 1000, CostAmount: 0.001, Currency: "USD",
+		MeteredValue: 1000, CostAmount: decimal.NewFromFloat(0.001), Currency: "USD",
 		PeriodStart: now.Add(-time.Hour), PeriodEnd: now,
 	})
 	testStore.InsertCostEntry(ctx, inventory.CostEntry{
 		MeteringEntryID: 3, RateID: maasRateID, TenantID: "tenant-b", ProjectID: "proj-2",
 		ResourceType: "model", ResourceID: "llama-3", MeterName: "maas_tokens_in",
-		MeteredValue: 500, CostAmount: 0.0005, Currency: "USD",
+		MeteredValue: 500, CostAmount: decimal.NewFromFloat(0.0005), Currency: "USD",
 		PeriodStart: now.Add(-time.Hour), PeriodEnd: now,
 	})
 }
@@ -1499,5 +1500,442 @@ func TestMaaSUserIDPropagation(t *testing.T) {
 	}
 	if userID != "alice@example.com" {
 		t.Errorf("user_id on metering_entries: got %q, want alice@example.com", userID)
+	}
+}
+
+// ── Quota CRUD Tests ──
+
+func TestCreateQuota(t *testing.T) {
+	body := `{"name":"test quota","tenant_id":"crud-tenant","meter_name":"maas_tokens_in","limit_value":5000000,"unit":"tokens","period":"monthly"}`
+	resp, err := http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, b)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["name"] != "test quota" {
+		t.Errorf("name: got %v", result["name"])
+	}
+	if result["policy"] != "deny" {
+		t.Errorf("policy should default to deny: got %v", result["policy"])
+	}
+	if result["id"] == nil || result["id"].(float64) == 0 {
+		t.Error("expected non-zero id")
+	}
+}
+
+func TestCreateQuota_MissingFields(t *testing.T) {
+	body := `{"meter_name":"x"}`
+	resp, err := http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing tenant_id, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateQuota_InvalidPeriod(t *testing.T) {
+	body := `{"tenant_id":"t","meter_name":"m","limit_value":1,"unit":"u","period":"banana"}`
+	resp, err := http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid period, got %d", resp.StatusCode)
+	}
+}
+
+func TestListQuotas(t *testing.T) {
+	resp, err := http.Get(testServer.URL + "/api/v1/quotas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	quotas, ok := result["quotas"].([]interface{})
+	if !ok {
+		t.Fatal("expected quotas array")
+	}
+	if len(quotas) == 0 {
+		t.Error("expected at least one quota")
+	}
+}
+
+func TestListQuotas_TenantFilter(t *testing.T) {
+	resp, err := http.Get(testServer.URL + "/api/v1/quotas?tenant_id=nonexistent-tenant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	quotas := result["quotas"].([]interface{})
+	if len(quotas) != 0 {
+		t.Errorf("expected 0 quotas for nonexistent tenant, got %d", len(quotas))
+	}
+}
+
+func TestDeleteQuota(t *testing.T) {
+	// Create a quota to delete
+	body := `{"tenant_id":"del-tenant","meter_name":"del_meter","limit_value":100,"unit":"units","period":"monthly"}`
+	createResp, _ := http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	var created map[string]interface{}
+	json.NewDecoder(createResp.Body).Decode(&created)
+	createResp.Body.Close()
+	id := int64(created["id"].(float64))
+
+	// Delete it
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/quotas/%d", testServer.URL, id), nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteQuota_NotFound(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", testServer.URL+"/api/v1/quotas/999999", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", resp.StatusCode)
+	}
+}
+
+// ── Fleet-Level Status Tests ──
+
+func TestListQuotas_WithStatus(t *testing.T) {
+	ctx := context.Background()
+	ts := time.Now().UnixNano()
+	tenantID := fmt.Sprintf("fleet-tenant-%d", ts)
+	now := time.Now().UTC()
+
+	// Create a quota
+	testStore.UpsertQuota(ctx, inventory.QuotaRecord{
+		TenantID: tenantID, MeterName: "vm_uptime_seconds",
+		LimitValue: 10000, Unit: "seconds", Period: "monthly",
+		EffectiveFrom: now.Add(-time.Hour),
+	})
+
+	// Add some consumption
+	testStore.InsertMeteringEntry(ctx, inventory.MeteringEntry{
+		ResourceType: "compute_instance", ResourceID: "vm-fleet",
+		TenantID: tenantID, MeterName: "vm_uptime_seconds",
+		Value: 3000, Unit: "seconds",
+		PeriodStart: now.Add(-60 * time.Second), PeriodEnd: now,
+	})
+
+	resp, err := http.Get(testServer.URL + "/api/v1/quotas?tenant_id=" + tenantID + "&status=true")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Quotas []struct {
+			MeterName  string          `json:"meter_name"`
+			Consumed   float64         `json:"consumed"`
+			Percentage float64         `json:"percentage"`
+			Thresholds map[string]bool `json:"thresholds"`
+		} `json:"quotas"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	found := false
+	for _, q := range result.Quotas {
+		if q.MeterName == "vm_uptime_seconds" {
+			found = true
+			if q.Consumed < 3000 {
+				t.Errorf("consumed: got %.0f, want >= 3000", q.Consumed)
+			}
+			if q.Percentage <= 0 {
+				t.Error("percentage should be > 0")
+			}
+			if q.Thresholds == nil {
+				t.Error("thresholds should be present with status=true")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected vm_uptime_seconds quota for tenant %s", tenantID)
+	}
+}
+
+func TestListQuotas_WithoutStatus(t *testing.T) {
+	// Without ?status=true, response should have raw QuotaRecords (no consumed/thresholds)
+	resp, err := http.Get(testServer.URL + "/api/v1/quotas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	// Should NOT contain "consumed" or "thresholds" fields since status=false
+	if strings.Contains(string(body), `"consumed"`) {
+		t.Error("without status=true, response should not include consumed field")
+	}
+}
+
+// ── Project Roll-up Tests ──
+
+func TestQuotaStatus_ProjectRollup(t *testing.T) {
+	ctx := context.Background()
+	ts := time.Now().UnixNano()
+	tenantID := fmt.Sprintf("rollup-tenant-%d", ts)
+	now := time.Now().UTC()
+
+	// Create tenant-level quota
+	testStore.UpsertQuota(ctx, inventory.QuotaRecord{
+		TenantID: tenantID, MeterName: "maas_tokens_in",
+		LimitValue: 10000000, Unit: "tokens", Period: "monthly",
+		EffectiveFrom: now.Add(-time.Hour),
+	})
+
+	// Create project-level quotas
+	testStore.UpsertQuota(ctx, inventory.QuotaRecord{
+		TenantID: tenantID, ProjectID: "project-alpha", MeterName: "maas_tokens_in",
+		LimitValue: 4000000, Unit: "tokens", Period: "monthly",
+		EffectiveFrom: now.Add(-time.Hour),
+	})
+	testStore.UpsertQuota(ctx, inventory.QuotaRecord{
+		TenantID: tenantID, ProjectID: "project-beta", MeterName: "maas_tokens_in",
+		LimitValue: 3000000, Unit: "tokens", Period: "monthly",
+		EffectiveFrom: now.Add(-time.Hour),
+	})
+
+	// Add consumption for each project
+	testStore.InsertMeteringEntry(ctx, inventory.MeteringEntry{
+		ResourceType: "model", ResourceID: "model-1",
+		TenantID: tenantID, ProjectID: "project-alpha",
+		MeterName: "maas_tokens_in", Value: 2000000, Unit: "tokens",
+		PeriodStart: now.Add(-60 * time.Second), PeriodEnd: now,
+	})
+	testStore.InsertMeteringEntry(ctx, inventory.MeteringEntry{
+		ResourceType: "model", ResourceID: "model-2",
+		TenantID: tenantID, ProjectID: "project-beta",
+		MeterName: "maas_tokens_in", Value: 1500000, Unit: "tokens",
+		PeriodStart: now.Add(-60 * time.Second), PeriodEnd: now,
+	})
+
+	resp, err := http.Get(testServer.URL + "/api/v1/quotas/" + tenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		TenantID string `json:"tenant_id"`
+		Quotas   []struct {
+			MeterName string  `json:"meter_name"`
+			Consumed  float64 `json:"consumed"`
+			Limit     float64 `json:"limit"`
+		} `json:"quotas"`
+		Projects map[string][]struct {
+			MeterName string  `json:"meter_name"`
+			Consumed  float64 `json:"consumed"`
+			Limit     float64 `json:"limit"`
+		} `json:"projects"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	// Tenant-level quota should show total consumption (2M + 1.5M = 3.5M)
+	if len(result.Quotas) == 0 {
+		t.Fatal("expected tenant-level quotas")
+	}
+	tenantConsumed := result.Quotas[0].Consumed
+	if tenantConsumed < 3400000 || tenantConsumed > 3600000 {
+		t.Errorf("tenant consumed: got %.0f, want ~3500000", tenantConsumed)
+	}
+
+	// Project quotas should be separated
+	if result.Projects == nil {
+		t.Fatal("expected projects field in response")
+	}
+	alpha, ok := result.Projects["project-alpha"]
+	if !ok || len(alpha) == 0 {
+		t.Fatal("expected project-alpha in projects")
+	}
+	if alpha[0].Consumed < 1900000 || alpha[0].Consumed > 2100000 {
+		t.Errorf("project-alpha consumed: got %.0f, want ~2000000", alpha[0].Consumed)
+	}
+
+	beta, ok := result.Projects["project-beta"]
+	if !ok || len(beta) == 0 {
+		t.Fatal("expected project-beta in projects")
+	}
+	if beta[0].Consumed < 1400000 || beta[0].Consumed > 1600000 {
+		t.Errorf("project-beta consumed: got %.0f, want ~1500000", beta[0].Consumed)
+	}
+}
+
+// ── Overcommit Validation Tests ──
+
+func TestCreateQuota_OvercommitRejected(t *testing.T) {
+	ctx := context.Background()
+	ts := time.Now().UnixNano()
+	tenantID := fmt.Sprintf("overcommit-tenant-%d", ts)
+	meterName := fmt.Sprintf("overcommit_meter_%d", ts)
+	now := time.Now().UTC()
+
+	// Create tenant-level quota with limit 1000
+	testStore.UpsertQuota(ctx, inventory.QuotaRecord{
+		TenantID: tenantID, MeterName: meterName,
+		LimitValue: 1000, Unit: "units", Period: "monthly",
+		EffectiveFrom: now.Add(-time.Hour),
+	})
+
+	// Create a project quota with 600 (OK, under tenant limit)
+	body := fmt.Sprintf(`{"tenant_id":"%s","project_id":"proj-a","meter_name":"%s","limit_value":600,"unit":"units","period":"monthly"}`, tenantID, meterName)
+	resp, err := http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("first project quota should succeed: got %d", resp.StatusCode)
+	}
+
+	// Create another project quota with 500 (would exceed: 600 + 500 = 1100 > 1000)
+	body = fmt.Sprintf(`{"tenant_id":"%s","project_id":"proj-b","meter_name":"%s","limit_value":500,"unit":"units","period":"monthly"}`, tenantID, meterName)
+	resp, err = http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("overcommitting project limits should fail: got %d, want 400", resp.StatusCode)
+	}
+
+	var errResp map[string]string
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if !strings.Contains(errResp["error"], "exceed tenant limit") {
+		t.Errorf("error should mention tenant limit: got %q", errResp["error"])
+	}
+}
+
+func TestCreateQuota_NoOvercommitWithoutTenantLimit(t *testing.T) {
+	ts := time.Now().UnixNano()
+	tenantID := fmt.Sprintf("no-limit-tenant-%d", ts)
+	meterName := fmt.Sprintf("no_limit_meter_%d", ts)
+
+	// No tenant-level quota exists — project quota should succeed regardless of value
+	body := fmt.Sprintf(`{"tenant_id":"%s","project_id":"proj-x","meter_name":"%s","limit_value":999999,"unit":"units","period":"monthly"}`, tenantID, meterName)
+	resp, err := http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("should succeed without tenant limit: got %d", resp.StatusCode)
+	}
+}
+
+// ── Monetary Budget Tests ──
+
+func TestQuotaStatus_MonetaryBudget(t *testing.T) {
+	ctx := context.Background()
+	ts := time.Now().UnixNano()
+	tenantID := fmt.Sprintf("budget-tenant-%d", ts)
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+	// Create a monetary budget: $5000/month across all meters
+	testStore.UpsertQuota(ctx, inventory.QuotaRecord{
+		Name:     "Monthly spend limit",
+		TenantID: tenantID, MeterName: "*",
+		LimitValue: 5000, Unit: "USD", Period: "monthly",
+		Policy: "deny", EffectiveFrom: monthStart,
+	})
+
+	// Insert a cost entry (simulating rated metering)
+	testStore.InsertCostEntry(ctx, inventory.CostEntry{
+		TenantID: tenantID, ResourceType: "compute_instance",
+		ResourceID: "vm-budget", MeterName: "vm_uptime_seconds",
+		MeteredValue: 3600, CostAmount: decimal.NewFromFloat(1500.00), Currency: "USD",
+		PeriodStart: monthStart, PeriodEnd: now,
+	})
+
+	resp, err := http.Get(testServer.URL + "/api/v1/quotas/" + tenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Quotas []struct {
+			MeterName  string  `json:"meter_name"`
+			Unit       string  `json:"unit"`
+			Limit      float64 `json:"limit"`
+			Consumed   float64 `json:"consumed"`
+			Percentage float64 `json:"percentage"`
+		} `json:"quotas"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if len(result.Quotas) == 0 {
+		t.Fatal("expected at least one quota")
+	}
+
+	budgetQuota := result.Quotas[0]
+	if budgetQuota.MeterName != "*" {
+		t.Errorf("meter_name: got %q, want *", budgetQuota.MeterName)
+	}
+	if budgetQuota.Unit != "USD" {
+		t.Errorf("unit: got %q, want USD", budgetQuota.Unit)
+	}
+	if budgetQuota.Consumed < 1499 || budgetQuota.Consumed > 1501 {
+		t.Errorf("consumed: got %.2f, want ~1500", budgetQuota.Consumed)
+	}
+	if budgetQuota.Percentage < 29 || budgetQuota.Percentage > 31 {
+		t.Errorf("percentage: got %.2f, want ~30%%", budgetQuota.Percentage)
+	}
+}
+
+func TestCreateQuota_MonetaryBudget(t *testing.T) {
+	ts := time.Now().UnixNano()
+	tenantID := fmt.Sprintf("budget-create-%d", ts)
+
+	body := fmt.Sprintf(`{"name":"Spend cap","tenant_id":"%s","meter_name":"*","limit_value":10000,"unit":"USD","period":"monthly","policy":"deny"}`, tenantID)
+	resp, err := http.Post(testServer.URL+"/api/v1/quotas", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, b)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["unit"] != "USD" {
+		t.Errorf("unit: got %v", result["unit"])
+	}
+	if result["meter_name"] != "*" {
+		t.Errorf("meter_name: got %v", result["meter_name"])
 	}
 }
