@@ -46,7 +46,7 @@
 | 16 | REQ-11 | LOW | Cost tiers | Partial | Tiers work correctly for MaaS (per-event); capacity-based cumulative tiers (GiB-month, core-hours) are not implemented and would silently undercharge if configured today |
 | 17 | REQ-12 | LOW | Daily OpenShift Virtualization costs | TBD | Still underspecified; PM added neocloud-style finer granularity as desirable and multi-tenant/project rates on shared clusters as a hard constraint |
 | 18 | REQ-8 | HIGH → Parked | Bare metal costing | Done (ahead of schedule) | Built already, parked for Jul 31; BMaaS is an Aug 31 OSAC deliverable; standalone (non-OCP) bare metal confirmed IN for post-PoC |
-| 19 | REQ-14 | HIGH | Wallets (prepaid balance) | Not started | Spec drafted (v1.6) — hybrid funding (postpaid invoices + project prepaid wallets); selective deduction by scope; no ledger built yet |
+| 19 | REQ-14 | HIGH | Wallets (prepaid balance) | Not started | Spec drafted (v1.6) — tenant wallets must-have; project/hybrid funding stretch; no ledger built yet |
 
 **At a glance (updated Jul 20):** 13 of 19 are Done, 4 are Partial (POC-ENV, REQ-3a, REQ-9, REQ-11), 1 is TBD (REQ-12), and 1 is Not started (REQ-14). Two requirements (REQ-10, REQ-8) remain explicitly parked by joint decision. The biggest Jul 20 impact is REQ-9 scope expansion (all listed gaps in scope for Jul 31) plus brand-new REQ-14 wallets. REQ-3a and REQ-9 still share the project→tenant quota roll-up gap; product rule is now **no overcommit of project limits** above the tenant limit (was previously framed as overcommit-allowed).
 
@@ -364,15 +364,15 @@ Budgets (REQ-9) and wallets may coexist on the same tenant; hybrid funding also 
 - No wallet / prepaid-balance concept exists in RHCM today
 - Closest capability is budgets/quotas (REQ-9), which model spending *limits*, not prepaid credits
 - AI Grid MB-005 was marked Out of Scope for the trial/product cut in HIGHTP tracking (Jul 2026); Cost still needs the capability for prepaid provider models
-- Spec draft: [wallet-spec-draft.md](../poc_architecture/boundary_monitoring/wallet-spec-draft.md) — Option B routing (project wallet → tenant wallet → postpaid)
+- Spec draft: [wallet-spec-draft.md](../poc_architecture/boundary_monitoring/wallet-spec-draft.md) — PoC Option A (tenant wallet); Option B hybrid routing is stretch
 
 **Gap Summary**
-Entirely greenfield. Do not implement by stretching REQ-9 budgets into open-ended monetary ceilings — product explicitly rejected that shortcut. Ledger mechanics may be shared under the hood, but the user model and settlement semantics must stay distinct. PoC must demo **hybrid funding** (postpaid corporate project + prepaid experimental project), not tenant-only prepaid.
+Entirely greenfield. Do not implement by stretching REQ-9 budgets into open-ended monetary ceilings — product explicitly rejected that shortcut. Ledger mechanics may be shared under the hood, but the user model and settlement semantics must stay distinct. PoC must-have is **tenant** create / top-up / query / deduct (PM AC); project-scoped hybrid funding (postpaid corporate + prepaid experimental team) is stretch.
 
 **Decisions (aligned with overview v1.6)**
-- Hybrid funding: postpaid corporate invoices + dedicated project prepaid wallets concurrently
-- Wallet scope: tenant + project; PoC maps “experimental team” → OSAC `project_id`
-- Deduction routing: project wallet if present → else tenant wallet if present → else postpaid (no deduction)
+- Wallet scope (PoC): tenant must-have; project optional / stretch
+- Deduction routing (PoC): Option A — all tenant metered cost deducts from the tenant wallet
+- Hybrid funding / project wallets: MB-005 product direction; stretch if schedule allows (Option B)
 - Zero balance: Cost reports status only; OSAC enforces hard stop
 - Payment capture / reserved allocations / billing multipliers: OUT (billing system)
 
@@ -380,7 +380,7 @@ Entirely greenfield. Do not implement by stretching REQ-9 budgets into open-ende
 - Design and implement prepaid wallets (consolidated action item #23) per [wallet-spec-draft.md](../poc_architecture/boundary_monitoring/wallet-spec-draft.md)
 - Who owns top-up UX (not payment capture) — OSAC console vs billing console? Cost exposes API only for PoC
 - Exact `% of topped-up amount` denominator — cumulative vs last top-up vs reset-on-deplete
-- Confirm “experimental team” always maps to OSAC project (vs a separate team dimension)
+- Confirm “experimental team” always maps to OSAC project (vs a separate team dimension) — stretch
 - OUT of scope: payment gateway / card capture; hard-stop enforcement; reserved allocations and billing multipliers; generating the postpaid corporate invoice itself
 
 ---
