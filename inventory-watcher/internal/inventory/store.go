@@ -1385,7 +1385,7 @@ func (s *Store) GetWalletForTenant(ctx context.Context, tenantID string) (*Walle
 func (s *Store) TopUpWallet(ctx context.Context, walletID string, amount decimal.Decimal, externalRef string) (*WalletLedgerEntry, error) {
 	if externalRef != "" {
 		var exists bool
-		s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM wallet_ledger_entries WHERE wallet_id = $1 AND external_ref = $2)`, walletID, externalRef).Scan(&exists)
+		_ = s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM wallet_ledger_entries WHERE wallet_id = $1 AND external_ref = $2)`, walletID, externalRef).Scan(&exists)
 		if exists {
 			return nil, fmt.Errorf("duplicate top-up: external_ref %s already applied", externalRef)
 		}
@@ -1395,7 +1395,7 @@ func (s *Store) TopUpWallet(ctx context.Context, walletID string, amount decimal
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var newBalance, newRef decimal.Decimal
 	err = tx.QueryRow(ctx, `
@@ -1424,7 +1424,7 @@ func (s *Store) DeductFromWallet(ctx context.Context, walletID string, costEntry
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var newBalance decimal.Decimal
 	err = tx.QueryRow(ctx, `
@@ -1436,7 +1436,7 @@ func (s *Store) DeductFromWallet(ctx context.Context, walletID string, costEntry
 		return nil, fmt.Errorf("deduct from wallet %s: %w", walletID, err)
 	}
 
-	tx.Exec(ctx, `UPDATE cost_entries SET wallet_applied = wallet_applied + $1 WHERE id = $2`, amount, costEntryID)
+	_, _ = tx.Exec(ctx, `UPDATE cost_entries SET wallet_applied = wallet_applied + $1 WHERE id = $2`, amount, costEntryID)
 
 	negAmount := amount.Neg()
 	var entry WalletLedgerEntry
