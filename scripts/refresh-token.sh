@@ -3,8 +3,13 @@
 #
 # Tokens are signed with the osac-oidc-tls private key (not osac-grpc-tls).
 # They expire after 7 days; run this script whenever:
-#   - CRC was restarted (cert rotation generates a new key)
+#   - The token expires (7 days after last run)
+#   - cert-manager rotates osac-oidc-tls (~90 day default lifetime) — the
+#     signing key changes on rotation, invalidating existing tokens
 #   - The consumer shows "token is not valid" in its logs
+#
+# CRC restart does NOT require a token refresh — secrets persist across
+# VM suspend/resume, so the signing key is unchanged.
 #
 # Requirements: python3, pip packages cryptography + pyjwt
 #   pip install cryptography pyjwt

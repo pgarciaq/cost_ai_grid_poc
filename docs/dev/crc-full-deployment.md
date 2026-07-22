@@ -607,10 +607,15 @@ EOF
 ## Step 8: Generate OSAC Token
 
 Tokens are signed with the **osac-oidc-tls** private key and expire after 7 days.
-Run this immediately after deployment and again whenever CRC restarts (cert
-rotation generates a new key). See [troubleshooting.md](troubleshooting.md)
-for the full explanation of why the key must be `osac-oidc-tls`, not
-`osac-grpc-tls`.
+CRC restart does **not** require a token refresh — Secrets persist across VM
+suspend/resume. You need to re-run this script when:
+
+- The token expires (7 days after last run), or
+- cert-manager rotates `osac-oidc-tls` (~90-day default) — the signing key
+  changes on rotation, invalidating any existing token.
+
+See [troubleshooting.md](troubleshooting.md) for the full explanation of why
+the key must be `osac-oidc-tls`, not `osac-grpc-tls`.
 
 ```bash
 # Requires: pip install cryptography pyjwt
