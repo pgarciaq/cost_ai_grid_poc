@@ -210,7 +210,12 @@ function updateTokenBtn() {
   if (getToken()) { btn.textContent = 'Token ✓'; btn.classList.add('has-token'); }
   else { btn.textContent = 'Token'; btn.classList.remove('has-token'); }
 }
-function showTokenModal() { $('tokenInput').value = getToken(); $('tokenModal').style.display = 'flex'; $('tokenInput').focus(); }
+function showTokenModal() {
+  const alreadyOpen = $('tokenModal').style.display === 'flex';
+  if (!alreadyOpen) $('tokenInput').value = getToken();
+  $('tokenModal').style.display = 'flex';
+  if (!alreadyOpen) $('tokenInput').focus();
+}
 function hideTokenModal() { $('tokenModal').style.display = 'none'; }
 function saveToken() { localStorage.setItem(TOKEN_KEY, $('tokenInput').value.trim()); updateTokenBtn(); hideTokenModal(); refresh(); }
 function clearToken() { localStorage.removeItem(TOKEN_KEY); updateTokenBtn(); hideTokenModal(); refresh(); }
