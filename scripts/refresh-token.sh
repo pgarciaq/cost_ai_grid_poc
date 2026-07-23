@@ -84,6 +84,7 @@ kubectl create secret generic cost-consumer-secrets \
   -n cost-mgmt \
   --from-literal=osac-token="$TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
+echo "$TOKEN" > /tmp/osac_token.txt
 
 echo "Restarting consumer pod..."
 kubectl delete pod -n cost-mgmt -l app=cost-event-consumer
