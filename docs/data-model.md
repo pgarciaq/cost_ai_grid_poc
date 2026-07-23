@@ -74,7 +74,7 @@ entries. The balance check API compares metering usage against quotas.
 ### Relationships
 
 - **Tenant** (`inventory_tenant`) is the top-level grouping; all inventory tables reference it via a `tenant` text field
-- **Project** links to resources via the `tenant` field (same tenant scope)
+- **Project** (`inventory_project`) belongs to a tenant (via `tenant` column) and is referenced by `inventory_compute_instance` and `inventory_model` via their `project` column — this is the Tenant → Project → Resource hierarchy synced from OSAC
 - **InstanceType** is referenced by `inventory_compute_instance.instance_type` — used to enrich cores/memory when OSAC doesn't carry them on the instance
 - **CatalogItem** is referenced by `inventory_bare_metal_instance.catalog_item`
 - **Cluster** is referenced by `inventory_compute_instance.cluster_id`
