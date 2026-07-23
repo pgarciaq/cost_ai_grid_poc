@@ -872,6 +872,94 @@ kubectl delete namespace istio-system
 kubectl delete crd $(kubectl get crd | grep istio.io | awk '{print $1}')
 ```
 
+## Enable Authentication on the Consumer API (Optional)
+
+By default the consumer's HTTP API (`/api/v1/...`) is open — no token
+required. You can enable JWT authentication at any time after the stack
+is running. The same token issued by `scripts/refresh-token.sh` is reused;
+no new credential infrastructure is needed.
+
+**How it works:** the consumer validates Bearer JWTs against the OSAC OIDC
+server (`osac-oidc.osac.svc:8013`) using OIDC Discovery + JWKS. The
+`/healthz` and `/readyz` endpoints remain open for probes.
+
+### 1. Extend CA bundle to cost-mgmt
+
+The consumer needs to reach the OIDC HTTPS endpoint. Extend the trust
+bundle that cert-manager already distributes:
+
+```bash
+oc patch bundle ca-bundle --type=merge -p='
+{
+  "spec": {
+    "target": {
+      "namespaceSelector": {
+        "matchExpressions": [{
+          "key": "kubernetes.io/metadata.name",
+          "operator": "In",
+          "values": ["osac", "postgres", "cost-mgmt"]
+        }]
+      }
+    }
+  }
+}'
+
+# Wait for the bundle to land
+sleep 5
+oc get configmap ca-bundle -n cost-mgmt -o jsonpath='{.data.bundle\.pem}' | head -1
+# Expected: -----BEGIN CERTIFICATE-----
+```
+
+### 2. Set auth env vars and mount CA bundle
+
+```bash
+oc set env deployment/cost-event-consumer -n cost-mgmt \
+  AUTH_ISSUER_URL=https://osac-oidc.osac.svc:8013 \
+  OSAC_CA_CERT=/ca-bundle/bundle.pem
+
+oc patch deployment cost-event-consumer -n cost-mgmt --type=strategic -p='
+{
+  "spec": {"template": {"spec": {
+    "containers": [{"name": "consumer",
+      "volumeMounts": [{"name": "ca-bundle", "mountPath": "/ca-bundle"}]}],
+    "volumes": [{"name": "ca-bundle", "configMap": {"name": "ca-bundle"}}]
+  }}}
+}'
+
+oc rollout status deployment/cost-event-consumer -n cost-mgmt
+```
+
+Look for this in the startup logs:
+```
+JWT authentication enabled  issuer=https://osac-oidc.osac.svc:8013
+```
+
+### 3. Verify
+
+```bash
+# Port-forward to test locally
+oc port-forward -n cost-mgmt svc/cost-event-consumer 8020:8020 &
+
+# Unauthenticated → 401
+curl -s http://localhost:8020/api/v1/reports/summary
+# {"error":"missing Authorization header"}
+
+# Health probe still open → 200
+curl -sf http://localhost:8020/healthz
+
+# Authenticated → 200
+TOKEN=$(oc get secret cost-consumer-secrets -n cost-mgmt \
+  -o jsonpath='{.data.osac-token}' | base64 -d)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8020/api/v1/reports/summary
+```
+
+### Disable authentication
+
+```bash
+oc set env deployment/cost-event-consumer -n cost-mgmt AUTH_ISSUER_URL-
+```
+
 ## Verification
 
 ```bash
