@@ -170,6 +170,7 @@ digraph erd_inventory {
     inventory_catalog_item -> inventory_bare_metal_instance [label="catalog_item" style=dashed]
     inventory_cluster -> inventory_compute_instance [label="cluster_id" style=dashed]
     inventory_project -> inventory_compute_instance [label="project" style=dashed]
+    inventory_project -> inventory_model [label="project" style=dashed]
     raw_events -> inventory_compute_instance [label="upsert on\nevent" style=dotted color="#999999"]
     raw_events -> inventory_cluster [label="upsert on\nevent" style=dotted color="#999999"]
     raw_events -> inventory_model [label="upsert on\nevent" style=dotted color="#999999"]
