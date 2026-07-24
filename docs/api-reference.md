@@ -2,9 +2,7 @@
 
 The API is defined by the [OpenAPI 3.0.3 specification](openapi.yaml).
 
-To view the interactive documentation, use any OpenAPI viewer:
-- [Swagger Editor](https://editor.swagger.io/) — paste the spec
-- `npx @redocly/cli preview-docs docs/openapi.yaml` — local preview
+[**Interactive API docs**](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/myersCody/cost_ai_grid_poc/main/docs/openapi.yaml) — live from the spec on main.
 
 ## Quick Reference
 
