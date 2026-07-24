@@ -34,7 +34,7 @@ info:
 
 
     **Handler implementation:**
-    [`internal/ingest/handler.go`](../inventory-watcher/internal/ingest/handler.go)
+    [`internal/api/handler.go`](../inventory-watcher/internal/api/handler.go)
 
     **Response types:**
     [`internal/inventory/models.go`](../inventory-watcher/internal/inventory/models.go)
